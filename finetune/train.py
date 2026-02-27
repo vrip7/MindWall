@@ -35,7 +35,7 @@ def main():
     print("  MindWall — QLoRA Fine-Tuning")
     print(f"  Model: {config['model_name']}")
     print(f"  Device: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'}")
-    print(f"  VRAM: {torch.cuda.get_device_properties(0).total_mem / 1e9:.1f} GB" if torch.cuda.is_available() else "")
+    print(f"  VRAM: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB" if torch.cuda.is_available() else "")
     print("=" * 60)
 
     # ── 1. Load model with 4-bit quantization ────────────────────────────
