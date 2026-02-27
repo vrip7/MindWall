@@ -7,8 +7,12 @@ Developed by Pradyumn Tandon (https://pradyumntandon.com) at VRIP7 (https://vrip
 
 import sys
 import json
+import os
 from pathlib import Path
 from datetime import datetime
+
+# Disable hf_transfer — it has file-locking bugs on Windows that corrupt downloads
+os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0"
 
 import yaml
 import torch
