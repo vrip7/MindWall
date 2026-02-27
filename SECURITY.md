@@ -12,7 +12,7 @@
 
 Instead, please report security issues responsibly:
 
-1. **Email:** Send a detailed report to **security@vrip7.com**
+1. **Email:** Send a detailed report to **contact@vrip7.com**
 2. **Subject line:** `[MindWall Security] Brief description`
 3. **Include:**
    - Description of the vulnerability
