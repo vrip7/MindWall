@@ -1,0 +1,18 @@
+# MindWall
+.env
+data/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+node_modules/
+dist/
+build/
+.venv/
+*.egg-info/
+.DS_Store
+Thumbs.db
+*.log
+finetune/output/
+finetune/datasets/raw/

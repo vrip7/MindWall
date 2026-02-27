@@ -1,0 +1,46 @@
+# MindWall — Docker Compose Development Override
+# Developed by Pradyumn Tandon (https://pradyumntandon.com) at VRIP7 (https://vrip7.com)
+# Usage: docker compose -f docker-compose.yml -f docker-compose.override.yml up
+
+version: "3.9"
+
+services:
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    volumes:
+      - ./api:/app                  # Hot-reload source code
+      - ./data/db:/app/data/db
+    environment:
+      - LOG_LEVEL=DEBUG
+      - WORKERS=1                   # Single worker for debugging
+    command: >
+      uvicorn main:app
+      --host 0.0.0.0
+      --port 8000
+      --reload
+      --reload-dir /app
+      --log-level debug
+
+  proxy:
+    volumes:
+      - ./proxy:/app                # Hot-reload proxy source
+    environment:
+      - LOG_LEVEL=DEBUG
+
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    # Override: use Vite dev server instead of nginx for HMR
+    command: ["sh", "-c", "npm install && npm run dev -- --host 0.0.0.0"]
+    volumes:
+      - ./dashboard:/app
+      - /app/node_modules           # Anonymous volume for node_modules
+    ports:
+      - "3000:3000"                 # Vite dev server port
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000
+      - VITE_WS_URL=ws://localhost:8000/ws/alerts

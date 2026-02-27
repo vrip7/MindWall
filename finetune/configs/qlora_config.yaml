@@ -1,0 +1,59 @@
+# MindWall QLoRA Training Configuration
+# Developed by Pradyumn Tandon (https://pradyumntandon.com) at VRIP7 (https://vrip7.com)
+
+# Model
+model_name: "unsloth/Meta-Llama-3.1-8B"
+max_seq_length: 2048
+load_in_4bit: true
+dtype: null  # auto-detect (bfloat16 on Ampere+)
+
+# LoRA
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.05
+lora_bias: "none"
+target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+use_gradient_checkpointing: "unsloth"  # 30% VRAM reduction
+random_state: 42
+
+# Training
+per_device_train_batch_size: 2
+gradient_accumulation_steps: 8  # effective batch = 16
+warmup_steps: 100
+num_train_epochs: 3
+learning_rate: 2.0e-4
+fp16: false
+bf16: true
+logging_steps: 25
+optim: "adamw_8bit"
+weight_decay: 0.01
+lr_scheduler_type: "cosine"
+save_strategy: "epoch"
+
+# Evaluation
+eval_strategy: "epoch"
+eval_steps: null
+per_device_eval_batch_size: 4
+
+# Paths
+output_dir: "./output/mindwall-lora"
+merged_output_dir: "./output/mindwall-merged"
+gguf_output_dir: "./output/mindwall-gguf"
+dataset_dir: "./datasets/processed/mindwall_train"
+eval_dataset_dir: "./datasets/processed/mindwall_eval"
+
+# Dataset
+dataset_text_field: "text"
+train_split_ratio: 0.9
+max_samples: null  # null = use all
+
+# Export
+export_quantization: "q4_k_m"  # GGUF quantization for Ollama
+ollama_model_name: "mindwall-llama3.1-8b"

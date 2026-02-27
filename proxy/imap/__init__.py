@@ -1,0 +1,1 @@
+# MindWall — IMAP Proxy Module

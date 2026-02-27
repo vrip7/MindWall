@@ -1,0 +1,113 @@
+# MindWall — Docker Compose Production Configuration
+# Developed by Pradyumn Tandon (https://pradyumntandon.com) at VRIP7 (https://vrip7.com)
+# Usage: docker compose up -d --build
+
+version: "3.9"
+
+services:
+
+  # ── Ollama LLM Server ──────────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: mindwall-ollama
+    restart: always
+    volumes:
+      - ./data/models:/root/.ollama
+    environment:
+      - OLLAMA_NUM_PARALLEL=4
+      - OLLAMA_MAX_LOADED_MODELS=1
+      - OLLAMA_FLASH_ATTENTION=1
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - mindwall-internal
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ── FastAPI Core Engine ────────────────────────────────────────────────
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: mindwall-api
+    restart: always
+    depends_on:
+      ollama:
+        condition: service_healthy
+    volumes:
+      - ./data/db:/app/data/db
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=mindwall-llama3.1-8b
+      - DATABASE_URL=sqlite+aiosqlite:////app/data/db/mindwall.db
+      - API_SECRET_KEY=${API_SECRET_KEY}
+      - LOG_LEVEL=INFO
+      - WORKERS=4
+    ports:
+      - "8000:8000"
+    networks:
+      - mindwall-internal
+      - mindwall-host
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ── IMAP/SMTP Proxy ───────────────────────────────────────────────────
+  proxy:
+    build:
+      context: ./proxy
+      dockerfile: Dockerfile
+    container_name: mindwall-proxy
+    restart: always
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      - API_BASE_URL=http://api:8000
+      - API_SECRET_KEY=${API_SECRET_KEY}
+      - IMAP_LISTEN_HOST=0.0.0.0
+      - IMAP_LISTEN_PORT=1143
+      - SMTP_LISTEN_HOST=0.0.0.0
+      - SMTP_LISTEN_PORT=1025
+      - LOG_LEVEL=INFO
+    ports:
+      - "1143:1143"       # IMAP — email clients connect here
+      - "1025:1025"       # SMTP — outbound monitoring
+    networks:
+      - mindwall-internal
+      - mindwall-host
+
+  # ── React Dashboard ───────────────────────────────────────────────────
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    container_name: mindwall-ui
+    restart: always
+    depends_on:
+      - api
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000
+      - VITE_WS_URL=ws://localhost:8000/ws/alerts
+    ports:
+      - "3000:80"
+    networks:
+      - mindwall-host
+
+networks:
+  mindwall-internal:
+    driver: bridge
+    internal: true          # Ollama + API cannot reach internet directly
+  mindwall-host:
+    driver: bridge

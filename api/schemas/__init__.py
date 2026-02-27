@@ -1,0 +1,1 @@
+# MindWall — Pydantic Schemas
