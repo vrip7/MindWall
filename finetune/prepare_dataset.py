@@ -41,9 +41,9 @@ def parse_mbox_corpus(mbox_path: Path) -> list[dict]:
     mbox = mailbox.mbox(str(mbox_path))
     for msg in mbox:
         try:
-            sender = msg.get("From", "")
-            subject = msg.get("Subject", "")
-            date_str = msg.get("Date", "")
+            sender = str(msg.get("From", "") or "")
+            subject = str(msg.get("Subject", "") or "")
+            date_str = str(msg.get("Date", "") or "")
 
             # Extract body
             body = ""
