@@ -1,5 +1,3 @@
-# MindWall — Dataset Downloader (Windows Version)
-
 $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -7,87 +5,85 @@ $RawDir = Join-Path $ScriptDir "raw"
 
 New-Item -ItemType Directory -Force -Path $RawDir | Out-Null
 
-Write-Host "[MindWall] Downloading training datasets..."
+Write-Host "[MindWall] Downloading datasets..."
 
-# ── 1. CEAS 2008 ─────────────────────────────────────────────
+# ================= CEAS =================
 $CeasDir = Join-Path $RawDir "ceas2008"
 
-if (-Not (Test-Path $CeasDir)) {
-    Write-Host "  -> Downloading CEAS 2008 corpus..."
+if (-not (Test-Path $CeasDir)) {
+
+    Write-Host "Downloading CEAS 2008..."
+
     New-Item -ItemType Directory -Force -Path $CeasDir | Out-Null
 
     try {
-        Invoke-WebRequest -Uri "https://monkey.org/~jose/phishing/phishing3.mbox" `
-                          -OutFile (Join-Path $CeasDir "phishing.mbox")
+        Invoke-WebRequest `
+            -Uri "https://monkey.org/~jose/phishing/phishing3.mbox" `
+            -OutFile (Join-Path $CeasDir "phishing.mbox")
     }
     catch {
-        Write-Host "  WARNING: CEAS 2008 download failed — add manually."
+        Write-Host "CEAS download failed."
     }
+
 }
 else {
-    Write-Host "  -> CEAS 2008 already present, skipping."
+    Write-Host "CEAS already exists."
 }
 
-# ── 2. Enron Dataset ─────────────────────────────────────────
+# ================= ENRON =================
 $EnronDir = Join-Path $RawDir "enron"
 
-if (-Not (Test-Path $EnronDir)) {
-    Write-Host "  -> Downloading Enron dataset..."
+if (-not (Test-Path $EnronDir)) {
+
+    Write-Host "Downloading Enron..."
+
     New-Item -ItemType Directory -Force -Path $EnronDir | Out-Null
 
-    $EnronTar = Join-Path $EnronDir "enron_mail.tar.gz"
+    $TarFile = Join-Path $EnronDir "enron_mail.tar.gz"
 
     try {
-        Invoke-WebRequest -Uri "https://www.cs.cmu.edu/~enron/enron_mail_20150507.tar.gz" `
-                          -OutFile $EnronTar
+        Invoke-WebRequest `
+            -Uri "https://www.cs.cmu.edu/~enron/enron_mail_20150507.tar.gz" `
+            -OutFile $TarFile
 
-        if (Test-Path $EnronTar) {
-            Write-Host "  -> Extracting Enron dataset..."
-            tar -xzf $EnronTar -C $EnronDir
-            Remove-Item $EnronTar -Force
+        if (Test-Path $TarFile) {
+            Write-Host "Extracting Enron..."
+            tar -xzf $TarFile -C $EnronDir
+            Remove-Item $TarFile -Force
         }
     }
     catch {
-        Write-Host "  WARNING: Enron download failed (large file)."
+        Write-Host "Enron download failed."
     }
+
 }
 else {
-    Write-Host "  -> Enron already present, skipping."
+    Write-Host "Enron already exists."
 }
 
-# ── 3. Nigerian Fraud ───────────────────────────────────────
+# ================= FRAUD =================
 $FraudDir = Join-Path $RawDir "nigerian_fraud"
 
-if (-Not (Test-Path $FraudDir)) {
-    Write-Host "  -> Downloading Nigerian Fraud corpus..."
+if (-not (Test-Path $FraudDir)) {
+
+    Write-Host "Downloading Nigerian Fraud dataset..."
+
     New-Item -ItemType Directory -Force -Path $FraudDir | Out-Null
 
     try {
-        Invoke-WebRequest -Uri "https://raw.githubusercontent.com/5starkarma/nigerian-prince/master/data/nigerian_prince_emails.csv" `
-                          -OutFile (Join-Path $FraudDir "nigerian_fraud_emails.csv")
+        Invoke-WebRequest `
+            -Uri "https://raw.githubusercontent.com/5starkarma/nigerian-prince/master/data/nigerian_prince_emails.csv" `
+            -OutFile (Join-Path $FraudDir "nigerian_fraud_emails.csv")
     }
     catch {
-        Write-Host "  WARNING: Nigerian fraud corpus download failed."
+        Write-Host "Fraud dataset download failed."
     }
+
 }
 else {
-    Write-Host "  -> Nigerian Fraud already present, skipping."
-}
-
-# ── 4. Synthetic Placeholder ─────────────────────────────────
-$SyntheticDir = Join-Path $RawDir "synthetic"
-New-Item -ItemType Directory -Force -Path $SyntheticDir | Out-Null
-
-if (-Not (Test-Path (Join-Path $SyntheticDir ".generated"))) {
-    Write-Host "  -> Synthetic dataset not yet generated."
-    Write-Host "     Run: python synthetic_generator.py"
+    Write-Host "Fraud dataset already exists."
 }
 
 Write-Host ""
-Write-Host "[MindWall] Dataset download complete."
-Write-Host "  Raw data location: $RawDir"
-Write-Host ""
-Write-Host "  Next steps:"
-Write-Host "    1. Generate synthetic data: python synthetic_generator.py"
-Write-Host "    2. Prepare training data:   python prepare_dataset.py"
-Write-Host "    3. Train:                   python train.py"
+Write-Host "[MindWall] Download complete."
+Write-Host "Location: $RawDir"
