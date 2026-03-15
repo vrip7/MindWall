@@ -84,7 +84,7 @@ MindWall is a fully self-hosted, privacy-first cybersecurity platform that inter
 │  │   OLLAMA LLM SERVER  │  │  REACT DASHBOARD     │  │  BROWSER EXTENSION     │ │
 │  │  (mindwall-ollama)   │  │  (mindwall-ui:3000)  │  │  (Chrome/Firefox)      │ │
 │  │                      │  │                      │  │                        │ │
-│  │  Llama 3.1 8B        │  │  Real-time Alerts    │  │  Gmail Web Intercept   │ │
+│  │  Qwen3-8B           │  │  Real-time Alerts    │  │  Gmail Web Intercept   │ │
 │  │  Fine-tuned (LoRA)   │  │  WebSocket Feed      │  │  → localhost:8000      │ │
 │  │  GGUF Q5_K_M         │  │  Threat Dashboard    │  │  /api/analyze          │ │
 │  │  24GB GPU Server     │  │  Employee Risk View  │  │                        │ │
@@ -297,7 +297,7 @@ services:
       - ./data/db:/app/data/db
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
-      - OLLAMA_MODEL=mindwall-llama3.1-8b
+      - OLLAMA_MODEL=qwen3:8b
       - DATABASE_URL=sqlite+aiosqlite:////app/data/db/mindwall.db
       - API_SECRET_KEY=${API_SECRET_KEY}
       - LOG_LEVEL=INFO
@@ -825,7 +825,7 @@ from transformers import TrainingArguments
 from datasets import load_from_disk
 
 MAX_SEQ_LENGTH = 2048
-MODEL_NAME = "unsloth/Meta-Llama-3.1-8B"
+MODEL_NAME = "unsloth/Qwen3-4B-Instruct-2507"
 OUTPUT_DIR = "./output/mindwall-lora"
 
 model, tokenizer = FastLanguageModel.from_pretrained(
@@ -931,7 +931,7 @@ The content script uses a `MutationObserver` to detect when Gmail renders an ema
 API_SECRET_KEY=<generate with: openssl rand -hex 32>
 DATABASE_URL=sqlite+aiosqlite:////app/data/db/mindwall.db
 OLLAMA_BASE_URL=http://ollama:11434
-OLLAMA_MODEL=mindwall-llama3.1-8b
+OLLAMA_MODEL=qwen3:8b
 OLLAMA_TIMEOUT_SECONDS=30
 LOG_LEVEL=INFO
 WORKERS=4
@@ -1005,7 +1005,7 @@ echo "[MindWall] Building and starting services..."
 docker compose up -d --build
 
 echo "[MindWall] Pulling LLM model (this may take a few minutes)..."
-docker compose exec ollama ollama pull llama3.1:8b
+docker compose exec ollama ollama pull qwen3:8b
 
 echo ""
 echo "✅ MindWall is running."

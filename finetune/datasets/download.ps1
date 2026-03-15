@@ -62,26 +62,44 @@ else {
 }
 
 # ================= FRAUD =================
+# Uses HuggingFace ealvaradob/phishing-dataset via the datasets library
+# (Replaces the previously unavailable nigerian-prince GitHub dataset)
 $FraudDir = Join-Path $RawDir "nigerian_fraud"
 
 if (-not (Test-Path $FraudDir)) {
 
-    Write-Host "Downloading Nigerian Fraud dataset..."
+    Write-Host "Downloading Phishing/Social Engineering corpus from HuggingFace..."
 
     New-Item -ItemType Directory -Force -Path $FraudDir | Out-Null
 
     try {
-        Invoke-WebRequest `
-            -Uri "https://raw.githubusercontent.com/5starkarma/nigerian-prince/master/data/nigerian_prince_emails.csv" `
-            -OutFile (Join-Path $FraudDir "nigerian_fraud_emails.csv")
+        python -c @"
+import csv, sys
+from pathlib import Path
+from datasets import load_dataset
+ds = load_dataset('ealvaradob/phishing-dataset', split='train')
+out_path = Path(sys.argv[1]) / 'nigerian_fraud_emails.csv'
+with open(out_path, 'w', newline='', encoding='utf-8') as f:
+    writer = csv.DictWriter(f, fieldnames=['body', 'label', 'sender', 'subject'])
+    writer.writeheader()
+    count = 0
+    for row in ds:
+        text = (row.get('Email Text') or '').strip()
+        etype = (row.get('Email Type') or '').lower()
+        if text and len(text) > 30:
+            label = 'legitimate' if 'safe' in etype else 'phishing'
+            writer.writerow({'body': text[:4000], 'label': label, 'sender': '', 'subject': ''})
+            count += 1
+print(f'Downloaded and processed {count} phishing email samples')
+"@ $FraudDir
     }
     catch {
-        Write-Host "Fraud dataset download failed."
+        Write-Host "Phishing corpus download failed. Ensure datasets is installed: pip install datasets"
     }
 
 }
 else {
-    Write-Host "Fraud dataset already exists."
+    Write-Host "Phishing corpus already exists."
 }
 
 Write-Host ""

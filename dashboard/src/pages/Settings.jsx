@@ -194,7 +194,7 @@ export default function Settings() {
           <div>
             <span className="text-gray-500 block text-xs">LLM Model</span>
             <span className="text-gray-300">
-              {settings.ollama_model || 'mindwall-llama3.1'}
+              {settings.ollama_model || 'qwen3:8b'}
             </span>
           </div>
           <div>

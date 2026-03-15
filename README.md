@@ -21,7 +21,7 @@
     <img src="https://img.shields.io/badge/python-3.11+-3776AB.svg" alt="Python 3.11+" />
     <img src="https://img.shields.io/badge/react-18-61DAFB.svg" alt="React 18" />
     <img src="https://img.shields.io/badge/docker-compose-2496ED.svg" alt="Docker Compose" />
-    <img src="https://img.shields.io/badge/LLM-Llama_3.1_8B-FF6F00.svg" alt="Llama 3.1 8B" />
+    <img src="https://img.shields.io/badge/LLM-Qwen3_8B-7C3AED.svg" alt="Qwen3 8B" />
   </p>
 </p>
 
@@ -46,7 +46,7 @@ Traditional email security focuses on malware and phishing links. MindWall detec
 | **Browser Extension** | Manifest V3 extension for Gmail web intercept via MutationObserver DOM injection |
 | **Real-time Dashboard** | React 18 + Tailwind CSS with WebSocket-powered live threat feed, dimension radar, risk heatmap |
 | **Behavioral Baselines** | Per-sender communication pattern learning with deviation scoring |
-| **Fine-tuned LLM** | Llama 3.1 8B fine-tuned with QLoRA via Unsloth, exported to GGUF for Ollama inference |
+| **Fine-tuned LLM** | Qwen3-4B-Instruct-2507 fine-tuned with QLoRA via Unsloth, exported to GGUF for Ollama inference. Base runtime uses Qwen3-8B |
 | **Privacy-First** | 100% on-premises — SQLite database, local Ollama server, no external API calls |
 | **GPU Accelerated** | NVIDIA GPU passthrough via Docker with CUDA support |
 | **Production-Ready** | Structured logging, health checks, request tracing, async throughout |
@@ -70,7 +70,7 @@ Traditional email security focuses on malware and phishing links. MindWall detec
 │             ▼                                                        │
 │   ┌──────────────────────┐     ┌──────────────────┐                  │
 │   │  FASTAPI ENGINE      │────▶│  OLLAMA LLM      │                  │
-│   │  • Pre-filter        │     │  Llama 3.1 8B    │                  │
+│   │  • Pre-filter        │     │  Qwen3-8B        │                  │
 │   │  • Behavioral Engine │     │  Fine-tuned LoRA  │                  │
 │   │  • 12-Dim Scorer     │     │  24GB GPU         │                  │
 │   │  • Alert Writer      │     └──────────────────┘                  │
@@ -136,7 +136,7 @@ mkdir -p data/db data/models
 docker compose up -d --build
 
 # 5. Pull the LLM model
-docker compose exec ollama ollama pull llama3.1:8b
+docker compose exec ollama ollama pull qwen3:8b
 ```
 
 ### Verify Installation
@@ -160,7 +160,7 @@ curl http://localhost:11434/api/tags
 |---------|-----------|------|-------------|
 | **API Engine** | `mindwall-api` | `8000` | FastAPI core — analysis pipeline, REST API, WebSocket |
 | **Dashboard** | `mindwall-ui` | `3000` | React 18 real-time threat monitoring UI |
-| **Ollama** | `mindwall-ollama` | `11434` | Local LLM inference server (Llama 3.1 8B) |
+| **Ollama** | `mindwall-ollama` | `11434` | Local LLM inference server (Qwen3-8B) |
 | **IMAP Proxy** | `mindwall-proxy` | `1143` | Transparent IMAP proxy with email interception |
 | **SMTP Proxy** | `mindwall-proxy` | `1025` | SMTP relay with outbound analysis |
 
@@ -175,7 +175,7 @@ All configuration is managed through environment variables in `.env`:
 API_SECRET_KEY=<generated-secret>
 DATABASE_URL=sqlite+aiosqlite:////app/data/db/mindwall.db
 OLLAMA_BASE_URL=http://ollama:11434
-OLLAMA_MODEL=mindwall-llama3.1-8b
+OLLAMA_MODEL=qwen3:8b
 OLLAMA_TIMEOUT_SECONDS=30
 LOG_LEVEL=INFO
 WORKERS=4
@@ -327,7 +327,7 @@ The MindWall browser extension intercepts emails in Gmail's web interface using 
 
 ## Fine-Tuning
 
-MindWall includes a complete fine-tuning pipeline for the Llama 3.1 8B model using QLoRA via Unsloth.
+MindWall includes a complete fine-tuning pipeline using Qwen3-4B-Instruct-2507 with QLoRA via Unsloth. The base runtime uses Qwen3-8B for inference via Ollama.
 
 ### Requirements
 
@@ -359,14 +359,14 @@ python evaluate.py
 python export.py
 
 # 7. Load into Ollama
-ollama create mindwall-llama3.1-8b -f Modelfile
+ollama create mindwall-qwen3-4b -f Modelfile
 ```
 
 ### Training Configuration
 
 The QLoRA configuration is in `finetune/configs/qlora_config.yaml`:
 
-- **Base model:** `unsloth/Meta-Llama-3.1-8B-Instruct`
+- **Base model:** `unsloth/Qwen3-4B-Instruct-2507-bnb-4bit`
 - **LoRA rank:** 64
 - **LoRA alpha:** 128
 - **Target modules:** `q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj`
@@ -457,7 +457,7 @@ mindwall/
 |---------|----------|
 | `nvidia-smi` not found | Install NVIDIA drivers: https://developer.nvidia.com/cuda-downloads |
 | Ollama container unhealthy | Check GPU access: `docker run --rm --gpus all nvidia/cuda:12.0-base nvidia-smi` |
-| Model pull fails | Retry: `docker compose exec ollama ollama pull llama3.1:8b` |
+| Model pull fails | Retry: `docker compose exec ollama ollama pull qwen3:8b` |
 | Port 8000 in use | Change in `.env` and `docker-compose.yml` |
 | IMAP connection refused | Ensure proxy container is running: `docker compose logs proxy` |
 | Dashboard blank | Check API connection: `curl http://localhost:8000/health` |

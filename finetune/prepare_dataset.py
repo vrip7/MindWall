@@ -1,6 +1,6 @@
 """
 MindWall — Dataset Preparation Script
-Downloads, normalizes, and formats all training data into the Llama 3.1 chat format.
+Downloads, normalizes, and formats all training data into the Qwen3 ChatML format.
 Developed by Pradyumn Tandon (https://pradyumntandon.com) at VRIP7 (https://vrip7.com)
 """
 
@@ -114,7 +114,7 @@ def parse_synthetic(jsonl_path: Path) -> list[dict]:
     return samples
 
 
-# ── Format into Llama 3.1 chat template ──────────────────────────────────────
+# ── Format into Qwen3 ChatML template ────────────────────────────────────────
 
 SYSTEM_PROMPT = """
 You are MindWall, a clinical-grade cybersecurity inference engine deployed
@@ -308,7 +308,7 @@ def heuristic_score_email(body: str, subject: str, label: str) -> dict:
 
 
 def format_corpus_sample(sample: dict) -> str:
-    """Format a raw corpus sample into the Llama 3.1 chat template."""
+    """Format a raw corpus sample into the Qwen3 ChatML template."""
     body = sample["body"]
     sender = sample.get("sender", "unknown@domain.com")
     subject = sample.get("subject", "No Subject")
@@ -353,12 +353,12 @@ Score each of the following 12 manipulation dimensions from 0 to 100.
 Respond ONLY with a JSON object."""
 
     return (
-        f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n"
-        f"{SYSTEM_PROMPT}<|eot_id|>"
-        f"<|start_header_id|>user<|end_header_id|>\n\n"
-        f"{user_prompt}<|eot_id|>"
-        f"<|start_header_id|>assistant<|end_header_id|>\n\n"
-        f"{response_json}<|eot_id|>"
+        f"<|im_start|>system\n"
+        f"{SYSTEM_PROMPT}<|im_end|>\n"
+        f"<|im_start|>user\n"
+        f"{user_prompt}<|im_end|>\n"
+        f"<|im_start|>assistant\n"
+        f"{response_json}<|im_end|>"
     )
 
 

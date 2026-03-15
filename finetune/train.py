@@ -1,6 +1,6 @@
 """
 MindWall — QLoRA Fine-Tuning Script
-Trains Llama 3.1 8B with Unsloth QLoRA on manipulation detection data.
+Trains Qwen3-4B-Instruct-2507 with Unsloth QLoRA on manipulation detection data.
 Fits on 8GB VRAM GPU.
 Developed by Pradyumn Tandon (https://pradyumntandon.com) at VRIP7 (https://vrip7.com)
 """
@@ -20,6 +20,44 @@ from unsloth import FastLanguageModel
 from trl import SFTTrainer
 from transformers import TrainingArguments
 from datasets import load_from_disk
+
+# ── Monkey-patch Unsloth's fused CE loss ─────────────────────────────────────
+# Unsloth's fused cross-entropy loss has two bugs on 8GB GPUs:
+#   1. Reports "no or negligible GPU memory" because the model fills VRAM
+#   2. Shape mismatch when it truncates hidden_states but not labels
+# Replace with standard PyTorch CE loss that materializes logits normally.
+# At batch=1, seq=1024, vocab=151936, bf16: logits ≈ 297 MB — fits in 8GB.
+
+import unsloth_zoo.fused_losses.cross_entropy_loss as _ce_module
+
+
+def _standard_ce_loss(
+    trainer, hidden_states, lm_head_weight, lm_head_bias, labels,
+    mask, n_items, scaling, target_gb=None, torch_compile=None,
+    logit_softcapping=None,
+):
+    logits = hidden_states @ lm_head_weight.T
+    if lm_head_bias is not None:
+        logits = logits + lm_head_bias
+    if logit_softcapping is not None and logit_softcapping > 0:
+        logits = logits / logit_softcapping
+        logits = torch.tanh(logits)
+        logits = logits * logit_softcapping
+    # Causal LM shift: predict next token
+    shift_logits = logits[..., :-1, :].contiguous()
+    shift_labels = labels[..., 1:].contiguous()
+    loss = torch.nn.functional.cross_entropy(
+        shift_logits.view(-1, shift_logits.size(-1)),
+        shift_labels.view(-1),
+        ignore_index=-100,
+        reduction="sum" if n_items is not None else "mean",
+    )
+    if n_items is not None:
+        loss = loss / n_items
+    return loss
+
+
+_ce_module.unsloth_fused_ce_loss = _standard_ce_loss
 
 # ── Configuration ────────────────────────────────────────────────────────────
 

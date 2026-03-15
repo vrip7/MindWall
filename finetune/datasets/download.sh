@@ -44,17 +44,35 @@ else
     echo "  → Enron corpus already present, skipping."
 fi
 
-# ── 3. Nigerian Fraud / 419 Advance-Fee Corpus ────────────────────────────
+# ── 3. Phishing / Social Engineering Email Corpus ─────────────────────────
+# (Replaces the previously unavailable nigerian-prince GitHub dataset)
+# Uses HuggingFace ealvaradob/phishing-dataset via the datasets library.
 FRAUD_DIR="${RAW_DIR}/nigerian_fraud"
 if [ ! -d "${FRAUD_DIR}" ]; then
-    echo "  → Downloading Nigerian Fraud email corpus..."
+    echo "  → Downloading Phishing/Social Engineering email corpus from HuggingFace..."
     mkdir -p "${FRAUD_DIR}"
-    curl -fSL \
-        "https://raw.githubusercontent.com/5starkarma/nigerian-prince/master/data/nigerian_prince_emails.csv" \
-        -o "${FRAUD_DIR}/nigerian_fraud_emails.csv" 2>/dev/null || \
-        echo "    ⚠ Nigerian fraud corpus download failed — add manually."
+    python3 -c "
+import csv, sys
+from pathlib import Path
+from datasets import load_dataset
+ds = load_dataset('ealvaradob/phishing-dataset', split='train')
+out_path = Path(sys.argv[1]) / 'nigerian_fraud_emails.csv'
+with open(out_path, 'w', newline='', encoding='utf-8') as f:
+    writer = csv.DictWriter(f, fieldnames=['body', 'label', 'sender', 'subject'])
+    writer.writeheader()
+    count = 0
+    for row in ds:
+        text = (row.get('Email Text') or '').strip()
+        etype = (row.get('Email Type') or '').lower()
+        if text and len(text) > 30:
+            label = 'legitimate' if 'safe' in etype else 'phishing'
+            writer.writerow({'body': text[:4000], 'label': label, 'sender': '', 'subject': ''})
+            count += 1
+print(f'  → Downloaded and processed {count} phishing email samples')
+" "${FRAUD_DIR}" 2>&1 || \
+        echo "    ⚠ Phishing corpus download failed — ensure datasets is installed: pip install datasets"
 else
-    echo "  → Nigerian Fraud corpus already present, skipping."
+    echo "  → Phishing corpus already present, skipping."
 fi
 
 # ── 4. Create placeholder for synthetic data ────────────────────────────────

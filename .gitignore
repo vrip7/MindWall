@@ -16,3 +16,5 @@ Thumbs.db
 *.log
 finetune/output/
 finetune/datasets/raw/
+finetune/unsloth_compiled_cache/
+finetune/datasets/processed/

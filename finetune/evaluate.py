@@ -174,9 +174,9 @@ def extract_json_from_text(text: str) -> dict | None:
 
 def extract_ground_truth(sample_text: str) -> dict | None:
     """Extract the ground truth response from a formatted training sample."""
-    # The assistant response is between the last header and eot_id
+    # The assistant response is between <|im_start|>assistant and <|im_end|>
     match = re.search(
-        r'<\|start_header_id\|>assistant<\|end_header_id\|>\s*\n\n([\s\S]*?)<\|eot_id\|>',
+        r'<\|im_start\|>assistant\n([\s\S]*?)<\|im_end\|>',
         sample_text
     )
     if match:
@@ -187,7 +187,7 @@ def extract_ground_truth(sample_text: str) -> dict | None:
 def extract_user_prompt(sample_text: str) -> str:
     """Extract the user prompt from a formatted training sample."""
     match = re.search(
-        r'<\|start_header_id\|>user<\|end_header_id\|>\s*\n\n([\s\S]*?)<\|eot_id\|>',
+        r'<\|im_start\|>user\n([\s\S]*?)<\|im_end\|>',
         sample_text
     )
     return match.group(1) if match else ""

@@ -31,22 +31,21 @@ def create_modelfile(gguf_path: str, model_name: str, output_dir: Path) -> Path:
 
 FROM {gguf_path}
 
-TEMPLATE \"\"\"<|begin_of_text|><|start_header_id|>system<|end_header_id|>
-
-{{{{ .System }}}}<|eot_id|><|start_header_id|>user<|end_header_id|>
-
-{{{{ .Prompt }}}}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
-
+TEMPLATE \"\"\"<|im_start|>system
+{{{{ .System }}}}<|im_end|>
+<|im_start|>user
+{{{{ .Prompt }}}}<|im_end|>
+<|im_start|>assistant
 \"\"\"
 
-SYSTEM \"\"\"You are MindWall, a cybersecurity analysis engine specialized in detecting psychological manipulation tactics in business communications. You analyze emails and messages with clinical precision, identifying social engineering patterns used by attackers to manipulate recipients into unsafe actions. You always respond with a valid JSON object and nothing else.\"\"\"
+SYSTEM \"\"\"You are MindWall, a cybersecurity analysis engine specialized in detecting psychological manipulation tactics in business communications. You analyze emails and messages with clinical precision, identifying social engineering patterns used by attackers to manipulate recipients into unsafe actions. You always respond with a valid JSON object and nothing else. Do not use thinking mode.\"\"\"
 
 PARAMETER temperature 0.1
 PARAMETER top_p 0.9
 PARAMETER top_k 40
 PARAMETER num_predict 1024
-PARAMETER stop "<|eot_id|>"
-PARAMETER stop "<|end_of_text|>"
+PARAMETER stop "<|im_end|>"
+PARAMETER stop "<|endoftext|>"
 """
 
     modelfile_path = output_dir / "Modelfile"
@@ -66,7 +65,7 @@ def main():
     merged_dir = Path(config["merged_output_dir"])
     gguf_dir = Path(config["gguf_output_dir"])
     quantization = config.get("export_quantization", "q4_k_m")
-    model_name = config.get("ollama_model_name", "mindwall-llama3.1-8b")
+    model_name = config.get("ollama_model_name", "mindwall-qwen3-4b")
 
     if not merged_dir.exists():
         print(f"  ❌ Merged model not found at {merged_dir}")

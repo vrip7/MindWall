@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Core Analysis Engine** — FastAPI-based 12-dimension manipulation analysis pipeline
 - **IMAP/SMTP Proxy** — Transparent asyncio proxy for intercepting email communications
-- **LLM Integration** — Ollama client for local Llama 3.1 8B inference with structured JSON output
+- **LLM Integration** — Ollama client for local Qwen3-8B inference with structured JSON output
 - **Behavioral Baseline Engine** — Per-sender communication pattern learning and deviation scoring
 - **Rule-Based Pre-Filter** — Fast keyword and regex pre-screening (zero GPU cost)
 - **12-Dimension Scoring** — Urgency, authority, emotional coercion, social proof, scarcity/FOMO, reciprocity, commitment escalation, identity manipulation, information asymmetry, trust exploitation, cognitive overload, isolation tactics

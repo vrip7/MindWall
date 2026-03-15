@@ -144,13 +144,13 @@ if (-not $ollamaReady) {
 
 # ── 6. Pull LLM Model ───────────────────────────────────────────────────────
 
-Write-Step "Pulling Llama 3.1 8B model (this may take several minutes)..."
+Write-Step "Pulling Qwen3 8B model (this may take several minutes)..."
 
-docker compose exec ollama ollama pull llama3.1:8b
+docker compose exec ollama ollama pull qwen3:8b
 if ($LASTEXITCODE -eq 0) {
     Write-Success "Model pulled successfully"
 } else {
-    Write-Warn "Model pull may have failed. Retry: docker compose exec ollama ollama pull llama3.1:8b"
+    Write-Warn "Model pull may have failed. Retry: docker compose exec ollama ollama pull qwen3:8b"
 }
 
 # ── 7. Verify Services ──────────────────────────────────────────────────────

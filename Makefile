@@ -48,11 +48,11 @@ setup:
 
 # Pull LLM model
 pull-model:
-	docker compose exec ollama ollama pull llama3.1:8b
+	docker compose exec ollama ollama pull qwen3:8b
 
 # Create Ollama Modelfile and load fine-tuned model
 load-model:
-	docker compose exec ollama ollama create mindwall-llama3.1-8b -f /root/.ollama/Modelfile
+	docker compose exec ollama ollama create mindwall-qwen3-4b -f /root/.ollama/Modelfile
 
 # Database reset
 db-reset:

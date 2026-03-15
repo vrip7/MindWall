@@ -307,12 +307,12 @@ Respond ONLY with a JSON object."""
     )
 
     return (
-        f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n"
-        f"{system}<|eot_id|>"
-        f"<|start_header_id|>user<|end_header_id|>\n\n"
-        f"{user_prompt}<|eot_id|>"
-        f"<|start_header_id|>assistant<|end_header_id|>\n\n"
-        f"{response}<|eot_id|>"
+        f"<|im_start|>system\n"
+        f"{system}<|im_end|>\n"
+        f"<|im_start|>user\n"
+        f"{user_prompt}<|im_end|>\n"
+        f"<|im_start|>assistant\n"
+        f"{response}<|im_end|>"
     )
 
 

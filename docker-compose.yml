@@ -47,7 +47,7 @@ services:
       - ./data/db:/app/data/db
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
-      - OLLAMA_MODEL=mindwall-llama3.1-8b
+      - OLLAMA_MODEL=qwen3:8b
       - DATABASE_URL=sqlite+aiosqlite:////app/data/db/mindwall.db
       - API_SECRET_KEY=${API_SECRET_KEY}
       - LOG_LEVEL=INFO

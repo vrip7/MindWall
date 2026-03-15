@@ -2,15 +2,15 @@
 # Developed by Pradyumn Tandon (https://pradyumntandon.com) at VRIP7 (https://vrip7.com)
 
 # Model
-model_name: "unsloth/Meta-Llama-3.1-8B"
-max_seq_length: 2048
+model_name: "unsloth/Qwen3-4B-Instruct-2507-bnb-4bit"
+max_seq_length: 1024
 load_in_4bit: true
 dtype: null  # auto-detect (bfloat16 on Ampere+)
 
 # LoRA
-lora_r: 16
-lora_alpha: 32
-lora_dropout: 0.05
+lora_r: 8
+lora_alpha: 16
+lora_dropout: 0
 lora_bias: "none"
 target_modules:
   - q_proj
@@ -24,8 +24,8 @@ use_gradient_checkpointing: "unsloth"  # 30% VRAM reduction
 random_state: 42
 
 # Training
-per_device_train_batch_size: 2
-gradient_accumulation_steps: 8  # effective batch = 16
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 16  # effective batch = 16
 warmup_steps: 100
 num_train_epochs: 3
 learning_rate: 2.0e-4
@@ -40,7 +40,7 @@ save_strategy: "epoch"
 # Evaluation
 eval_strategy: "epoch"
 eval_steps: null
-per_device_eval_batch_size: 4
+per_device_eval_batch_size: 1
 
 # Paths
 output_dir: "./output/mindwall-lora"
@@ -56,4 +56,4 @@ max_samples: null  # null = use all
 
 # Export
 export_quantization: "q4_k_m"  # GGUF quantization for Ollama
-ollama_model_name: "mindwall-llama3.1-8b"
+ollama_model_name: "mindwall-qwen3-4b"

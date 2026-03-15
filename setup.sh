@@ -27,7 +27,7 @@ until docker compose exec ollama curl -sf http://localhost:11434/api/tags > /dev
 done
 
 echo "[MindWall] Pulling LLM model (this may take a few minutes)..."
-docker compose exec ollama ollama pull llama3.1:8b
+docker compose exec ollama ollama pull qwen3:8b
 
 echo ""
 echo "✅ MindWall is running."
