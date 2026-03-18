@@ -8,7 +8,11 @@ subject lines before returning to the email client.
 """
 
 import asyncio
+import base64
+import re
+from typing import Optional
 
+import httpx
 import structlog
 
 from .upstream import UpstreamIMAPConnection
@@ -18,22 +22,77 @@ from config import ProxyConfig
 
 logger = structlog.get_logger(__name__)
 
+# Regex to parse quoted or unquoted tokens from IMAP LOGIN arguments
+_TOKEN_RE = re.compile(r'"([^"\\]*(?:\\.[^"\\]*)*)"|(\S+)')
+
+
+def _parse_login_args(args: str) -> tuple[Optional[str], Optional[str]]:
+    """
+    Parse username and password from IMAP LOGIN arguments.
+    Handles both quoted and unquoted forms per RFC 3501.
+    Returns (username, password) or (None, None) on failure.
+    """
+    tokens = _TOKEN_RE.findall(args)
+    parts = [quoted or unquoted for quoted, unquoted in tokens]
+    if len(parts) >= 2:
+        return parts[0], parts[1]
+    return None, None
+
+
+def _decode_authenticate_plain(data_b64: str) -> Optional[str]:
+    """
+    Decode AUTHENTICATE PLAIN base64 data to extract the username.
+    SASL PLAIN format: ``authzid\\x00authcid\\x00password``
+    Returns authcid (username) or None on failure.
+    """
+    try:
+        decoded = base64.b64decode(data_b64).decode("utf-8", errors="replace")
+        parts = decoded.split("\x00")
+        if len(parts) >= 2:
+            # authcid is the second field; authzid (first) may be empty
+            return parts[1] if parts[1] else parts[0]
+    except Exception:
+        pass
+    return None
+
 
 class MindWallIMAPServer:
     """
     Transparent IMAP proxy that:
     1. Accepts connections from email clients on localhost:1143
-    2. Opens authenticated connection to upstream IMAP server
-    3. Intercepts FETCH responses containing email bodies
-    4. Sends body to MindWall API for analysis
-    5. Injects risk score into subject line before returning to client
+    2. Auto-resolves the upstream IMAP server from MindWall API by login username
+    3. Opens authenticated connection to upstream IMAP server
+    4. Intercepts FETCH responses containing email bodies
+    5. Sends body to MindWall API for analysis
+    6. Injects risk score into subject line before returning to client
     """
 
     def __init__(self, config: ProxyConfig):
         self.config = config
         self.interceptor = FetchInterceptor(config.api_base_url, config.api_secret_key)
         self.injector = RiskScoreInjector()
+        self._http_client = httpx.AsyncClient(
+            base_url=config.api_base_url,
+            headers={"X-MindWall-Key": config.api_secret_key},
+            timeout=httpx.Timeout(10.0, connect=5.0),
+        )
         self._server = None
+
+    async def _resolve_upstream(self, username: str) -> Optional[dict]:
+        """
+        Query MindWall API to resolve the upstream IMAP server for a login username.
+        Returns dict with imap_host, imap_port, use_tls or None if not found.
+        """
+        try:
+            resp = await self._http_client.get(
+                f"/api/email-accounts/lookup/{username}",
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            logger.debug("imap.account_not_found", username=username, status=resp.status_code)
+        except Exception as e:
+            logger.error("imap.resolve_upstream_failed", username=username, error=str(e))
+        return None
 
     async def handle_client(
         self,
@@ -44,9 +103,6 @@ class MindWallIMAPServer:
         peer = client_writer.get_extra_info("peername")
         logger.info("imap.client_connected", peer=str(peer))
 
-        # Read the initial client greeting to extract upstream server info
-        # The client needs to configure upstream server in account settings
-        # We read the LOGIN/AUTHENTICATE command to get credentials
         upstream = None
 
         try:
@@ -56,7 +112,6 @@ class MindWallIMAPServer:
 
             upstream_host = None
             upstream_port = None
-            authenticated = False
 
             while True:
                 line = await asyncio.wait_for(client_reader.readline(), timeout=300)
@@ -77,15 +132,31 @@ class MindWallIMAPServer:
                 command = parts[1].upper()
 
                 if command == "CAPABILITY":
+                    # Do NOT advertise STARTTLS — email clients connecting
+                    # to the local proxy must use plaintext.  Upstream TLS
+                    # is handled transparently by the proxy itself.
                     client_writer.write(
-                        b"* CAPABILITY IMAP4rev1 AUTH=PLAIN LOGIN STARTTLS\r\n"
+                        b"* CAPABILITY IMAP4rev1 AUTH=PLAIN LOGIN ID\r\n"
                     )
                     client_writer.write(f"{tag} OK CAPABILITY completed\r\n".encode())
                     await client_writer.drain()
 
+                elif command == "ID":
+                    # RFC 2971 — many clients (Thunderbird, Apple Mail) send
+                    # ID before authentication.  Return minimal server ID.
+                    client_writer.write(
+                        b'* ID ("name" "MindWall" "vendor" "VRIP7")\r\n'
+                    )
+                    client_writer.write(f"{tag} OK ID completed\r\n".encode())
+                    await client_writer.drain()
+
+                elif command == "NOOP":
+                    client_writer.write(f"{tag} OK NOOP completed\r\n".encode())
+                    await client_writer.drain()
+
                 elif command == "XMINDWALL" and len(parts) > 2:
                     # Custom command: XMINDWALL <host> <port>
-                    # Allows client to specify upstream server
+                    # Optional manual override for upstream server
                     server_parts = parts[2].split()
                     if len(server_parts) >= 2:
                         upstream_host = server_parts[0]
@@ -95,13 +166,30 @@ class MindWallIMAPServer:
                         client_writer.write(f"{tag} BAD Usage: XMINDWALL host port\r\n".encode())
                     await client_writer.drain()
 
-                elif command in ("LOGIN", "AUTHENTICATE"):
+                elif command == "LOGIN":
+                    args = parts[2] if len(parts) > 2 else ""
+                    login_username, _ = _parse_login_args(args)
+                    logger.info("imap.login_attempt", username=login_username, peer=str(peer))
+
+                    # Auto-resolve upstream if not explicitly set via XMINDWALL
+                    if not upstream_host and login_username:
+                        account = await self._resolve_upstream(login_username)
+                        if account:
+                            upstream_host = account["imap_host"]
+                            upstream_port = account["imap_port"]
+                            logger.info(
+                                "imap.upstream_resolved",
+                                username=login_username,
+                                host=upstream_host,
+                                port=upstream_port,
+                            )
+                        else:
+                            logger.warning("imap.account_not_found", username=login_username)
+
                     if not upstream_host:
-                        # Default to reading from initial connection or env
-                        # In production, upstream is configured per-account
                         client_writer.write(
-                            f"{tag} NO Upstream server not configured. "
-                            f"Use XMINDWALL <host> <port> first.\r\n".encode()
+                            f"{tag} NO [ALERT] Account not configured in MindWall. "
+                            f"Register this email in the MindWall dashboard first.\r\n".encode()
                         )
                         await client_writer.drain()
                         continue
@@ -124,10 +212,94 @@ class MindWallIMAPServer:
                     await client_writer.drain()
 
                     if any(f"{tag} OK" in r for r in response):
-                        authenticated = True
-                        # Switch to bidirectional proxy mode
+                        logger.info("imap.authenticated", username=login_username, peer=str(peer))
                         await self._pipe(client_reader, client_writer, upstream)
                         break
+                    else:
+                        logger.warning("imap.auth_failed", username=login_username, peer=str(peer))
+                        # Close failed upstream so a retry can reconnect
+                        upstream.close()
+                        upstream = None
+
+                elif command == "AUTHENTICATE":
+                    # AUTHENTICATE PLAIN — extract credentials from base64,
+                    # resolve upstream, replay auth to the real IMAP server.
+                    auth_args = parts[2] if len(parts) > 2 else ""
+                    auth_parts = auth_args.split(None, 1)
+                    mechanism = auth_parts[0].upper() if auth_parts else ""
+                    inline_data = auth_parts[1].strip() if len(auth_parts) > 1 else ""
+
+                    if mechanism != "PLAIN":
+                        client_writer.write(
+                            f"{tag} NO Unsupported authentication mechanism\r\n".encode()
+                        )
+                        await client_writer.drain()
+                        continue
+
+                    # Collect base64 credentials (inline or via continuation)
+                    if not inline_data:
+                        client_writer.write(b"+ \r\n")
+                        await client_writer.drain()
+                        cont_line = await asyncio.wait_for(client_reader.readline(), timeout=60)
+                        inline_data = cont_line.decode("utf-8", errors="replace").strip()
+
+                    auth_username = _decode_authenticate_plain(inline_data)
+                    logger.info("imap.authenticate_attempt", mechanism=mechanism, username=auth_username, peer=str(peer))
+
+                    # Auto-resolve upstream from MindWall API
+                    if not upstream_host and auth_username:
+                        account = await self._resolve_upstream(auth_username)
+                        if account:
+                            upstream_host = account["imap_host"]
+                            upstream_port = account["imap_port"]
+                            logger.info("imap.upstream_resolved", username=auth_username, host=upstream_host, port=upstream_port)
+                        else:
+                            logger.warning("imap.account_not_found", username=auth_username)
+
+                    if not upstream_host:
+                        client_writer.write(
+                            f"{tag} NO [ALERT] Account not configured in MindWall. "
+                            f"Register this email in the MindWall dashboard first.\r\n".encode()
+                        )
+                        await client_writer.drain()
+                        continue
+
+                    # Connect to upstream and replay AUTHENTICATE PLAIN
+                    upstream = UpstreamIMAPConnection(
+                        host=upstream_host,
+                        port=upstream_port,
+                        use_ssl=True,
+                    )
+                    await upstream.connect()
+
+                    # Send AUTHENTICATE PLAIN (without inline data) to upstream
+                    await upstream.send_line(f"{tag} AUTHENTICATE PLAIN")
+                    # Read the continuation prompt '+' from upstream
+                    cont_resp = await asyncio.wait_for(upstream._reader.readline(), timeout=10)
+                    cont_decoded = cont_resp.decode("utf-8", errors="replace").strip()
+
+                    if cont_decoded.startswith("+"):
+                        # Send the base64 credentials to upstream
+                        await upstream.send_line(inline_data)
+                        response = await upstream.read_response(tag)
+                    elif cont_decoded.startswith(f"{tag} "):
+                        # Server rejected immediately
+                        response = [cont_decoded]
+                    else:
+                        response = [cont_decoded] + await upstream.read_response(tag)
+
+                    for resp_line in response:
+                        client_writer.write(resp_line.encode() + b"\r\n")
+                    await client_writer.drain()
+
+                    if any(f"{tag} OK" in r for r in response):
+                        logger.info("imap.authenticated", username=auth_username, peer=str(peer))
+                        await self._pipe(client_reader, client_writer, upstream)
+                        break
+                    else:
+                        logger.warning("imap.auth_failed", username=auth_username, peer=str(peer))
+                        upstream.close()
+                        upstream = None
 
                 elif command == "LOGOUT":
                     if upstream:
@@ -138,12 +310,17 @@ class MindWallIMAPServer:
                     break
 
                 elif command == "STARTTLS":
-                    # TLS is handled at the upstream level
-                    client_writer.write(f"{tag} NO STARTTLS not supported on proxy (use SSL upstream)\r\n".encode())
+                    # Not advertised in CAPABILITY but some clients try anyway.
+                    # Local proxy runs plaintext; upstream TLS is handled internally.
+                    client_writer.write(
+                        f"{tag} BAD STARTTLS is not supported. "
+                        f"Configure your email client with 'No encryption' or 'None' "
+                        f"for this server (localhost:{self.config.imap_listen_port}).\r\n".encode()
+                    )
                     await client_writer.drain()
 
                 else:
-                    if upstream and authenticated:
+                    if upstream:
                         await upstream.send_line(decoded)
                         response = await upstream.read_response(tag)
                         for resp_line in response:

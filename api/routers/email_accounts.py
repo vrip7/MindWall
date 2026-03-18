@@ -138,6 +138,41 @@ async def create_email_account(request: Request, payload: EmailAccountCreate):
     )
 
 
+@router.get("/lookup/{username}")
+async def lookup_email_account(request: Request, username: str):
+    """Internal: Resolve upstream server config by login username.
+
+    Used by the IMAP/SMTP proxy to auto-resolve upstream host/port when
+    the email client authenticates against the proxy.
+    """
+    session_factory = request.app.state.session_factory
+    async with session_factory() as session:
+        result = await session.execute(
+            text(
+                "SELECT email, imap_host, imap_port, smtp_host, smtp_port, "
+                "username, password, use_tls, enabled "
+                "FROM email_accounts WHERE username = :username AND enabled = 1"
+            ),
+            {"username": username},
+        )
+        row = result.fetchone()
+
+    if not row:
+        return JSONResponse(status_code=404, content={"detail": "Account not found"})
+
+    return {
+        "email": row[0],
+        "imap_host": row[1],
+        "imap_port": row[2],
+        "smtp_host": row[3],
+        "smtp_port": row[4],
+        "username": row[5],
+        "password": row[6],
+        "use_tls": bool(row[7]),
+        "enabled": bool(row[8]),
+    }
+
+
 @router.delete("/{account_id}")
 async def delete_email_account(request: Request, account_id: int):
     """Delete an email account configuration."""

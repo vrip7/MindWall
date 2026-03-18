@@ -5,10 +5,10 @@
  */
 
 import React, { useState, useMemo } from 'react'
-import { Search, ArrowUpDown, User, TrendingUp, TrendingDown, Trash2 } from 'lucide-react'
+import { Search, ArrowUpDown, User, TrendingUp, TrendingDown, Trash2, Mail, Server } from 'lucide-react'
 import clsx from 'clsx'
 
-export default function EmployeeTable({ employees = [], onSelect, onDelete }) {
+export default function EmployeeTable({ employees = [], onSelect, onDelete, onViewProxy }) {
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState('risk_score')
   const [sortDir, setSortDir] = useState('desc')
@@ -159,16 +159,35 @@ export default function EmployeeTable({ employees = [], onSelect, onDelete }) {
                   )}
                 </td>
                 <td className="px-3 py-3">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onDelete?.(emp.id, emp.display_name || emp.email)
-                    }}
-                    className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition-colors"
-                    title="Remove employee"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    {emp.email_account_configured && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onViewProxy?.(emp.email)
+                        }}
+                        className="p-1.5 rounded-lg text-mindwall-400 hover:text-mindwall-300 hover:bg-mindwall-400/10 transition-colors"
+                        title="View proxy configuration"
+                      >
+                        <Server className="w-4 h-4" />
+                      </button>
+                    )}
+                    {!emp.email_account_configured && (
+                      <span className="p-1.5 text-gray-600" title="No email account configured">
+                        <Mail className="w-4 h-4" />
+                      </span>
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onDelete?.(emp.id, emp.display_name || emp.email)
+                      }}
+                      className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition-colors"
+                      title="Remove employee"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

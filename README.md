@@ -1,5 +1,4 @@
 <p align="center">
-  <img src="extension/icons/README.md" width="0" height="0" />
   <h1 align="center">🛡️ MindWall</h1>
   <p align="center">
     <strong>Cognitive Firewall — AI-Powered Human Manipulation Detection</strong>
@@ -11,14 +10,14 @@
     <a href="#quick-start">Quick Start</a> •
     <a href="#architecture">Architecture</a> •
     <a href="#features">Features</a> •
-    <a href="#configuration">Configuration</a> •
-    <a href="#api-reference">API</a> •
-    <a href="#fine-tuning">Fine-Tuning</a> •
+    <a href="#services">Services</a> •
+    <a href="#email-client-setup">Email Setup</a> •
+    <a href="#documentation">Docs</a> •
     <a href="#contributing">Contributing</a>
   </p>
   <p align="center">
     <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" />
-    <img src="https://img.shields.io/badge/python-3.11+-3776AB.svg" alt="Python 3.11+" />
+    <img src="https://img.shields.io/badge/python-3.12-3776AB.svg" alt="Python 3.12" />
     <img src="https://img.shields.io/badge/react-18-61DAFB.svg" alt="React 18" />
     <img src="https://img.shields.io/badge/docker-compose-2496ED.svg" alt="Docker Compose" />
     <img src="https://img.shields.io/badge/LLM-Qwen3_8B-7C3AED.svg" alt="Qwen3 8B" />
@@ -29,11 +28,11 @@
 
 ## Overview
 
-MindWall acts as a transparent proxy between email clients and upstream mail servers, analyzing every incoming message through a multi-stage pipeline that combines rule-based pre-filtering, behavioral baseline analysis, and LLM-powered 12-dimension manipulation scoring — all running entirely on-premises. **Zero data leaves the deployment boundary.**
+MindWall acts as a transparent proxy between email clients and upstream mail servers, analyzing every incoming message through a 10-stage pipeline that combines rule-based pre-filtering, behavioral baseline analysis, and LLM-powered 12-dimension manipulation scoring — all running entirely on-premises. **Zero data leaves the deployment boundary.**
 
 ### Why MindWall?
 
-Traditional email security focuses on malware and phishing links. MindWall detects **psychological manipulation** — urgency exploitation, authority fabrication, emotional coercion, social proof manufacturing, and 8 other cognitive attack dimensions that bypass conventional filters.
+Traditional email security focuses on malware and phishing links. MindWall detects **psychological manipulation** — artificial urgency, authority impersonation, fear/threat induction, emotional escalation, and 8 other cognitive attack dimensions that bypass conventional filters.
 
 ---
 
@@ -41,12 +40,12 @@ Traditional email security focuses on malware and phishing links. MindWall detec
 
 | Feature | Description |
 |---------|-------------|
-| **12-Dimension Analysis** | Urgency exploitation, authority fabrication, emotional coercion, social proof, scarcity/FOMO, reciprocity traps, commitment escalation, identity manipulation, information asymmetry, trust exploitation, cognitive overload, isolation tactics |
+| **12-Dimension Analysis** | Artificial urgency, authority impersonation, fear/threat induction, reciprocity exploitation, scarcity tactics, social proof manipulation, sender behavioral deviation, cross-channel coordination, emotional escalation, request/context mismatch, unusual action requested, timing anomaly |
 | **IMAP/SMTP Proxy** | Transparent interception — works with Thunderbird, Apple Mail, Outlook, any IMAP client |
 | **Browser Extension** | Manifest V3 extension for Gmail web intercept via MutationObserver DOM injection |
 | **Real-time Dashboard** | React 18 + Tailwind CSS with WebSocket-powered live threat feed, dimension radar, risk heatmap |
-| **Behavioral Baselines** | Per-sender communication pattern learning with deviation scoring |
-| **Fine-tuned LLM** | Qwen3-4B-Instruct-2507 fine-tuned with QLoRA via Unsloth, exported to GGUF for Ollama inference. Base runtime uses Qwen3-8B |
+| **Behavioral Baselines** | Per-sender communication pattern learning with EMA deviation scoring |
+| **Fine-tuned LLM** | Qwen3-4B fine-tuned with QLoRA via Unsloth, exported to GGUF for Ollama. Base runtime uses Qwen3-8B |
 | **Privacy-First** | 100% on-premises — SQLite database, local Ollama server, no external API calls |
 | **GPU Accelerated** | NVIDIA GPU passthrough via Docker with CUDA support |
 | **Production-Ready** | Structured logging, health checks, request tracing, async throughout |
@@ -59,30 +58,38 @@ Traditional email security focuses on malware and phishing links. MindWall detec
 ┌──────────────────────────────────────────────────────────────────────┐
 │                    ORGANIZATIONAL NETWORK BOUNDARY                    │
 │                                                                      │
-│   Email Clients (Thunderbird/Outlook/Apple Mail)                     │
-│         │                                                            │
-│         ▼                                                            │
+│   Email Clients (Thunderbird / Outlook / Apple Mail)                 │
+│         │                          ┌──────────────────┐              │
+│         ▼                          │  CHROME EXTENSION │              │
+│   ┌──────────────────────┐         │  Gmail Intercept  │              │
+│   │  IMAP/SMTP PROXY     │         └────────┬─────────┘              │
+│   │  :1143 (IMAP)        │                  │                        │
+│   │  :1025 (SMTP)        │                  │                        │
+│   │  Auto-resolve upstream│                  │                        │
+│   └─────────┬────────────┘                  │                        │
+│             │ POST /api/analyze              │                        │
+│             ▼                               ▼                        │
+│   ┌────────────────────────────────────────────────┐                 │
+│   │  FASTAPI ANALYSIS ENGINE  :5297                │                 │
+│   │  10-stage pipeline:                            │                 │
+│   │  PreFilter → Baseline → Deviation → LLM →     │  ┌────────────┐│
+│   │  Aggregate → Severity → Persist → Alert →  ───┼──│  OLLAMA    ││
+│   │  WebSocket broadcast → Baseline update         │  │  Qwen3-8B ││
+│   │                                                │  │  GPU-only  ││
+│   │  SQLite: data/db/mindwall.db                   │  └────────────┘│
+│   └────────────────┬───────────────────────────────┘                 │
+│                    │ WebSocket                                        │
+│                    ▼                                                  │
 │   ┌──────────────────────┐                                           │
-│   │  IMAP/SMTP PROXY     │  localhost:1143 (IMAP) / :1025 (SMTP)    │
-│   │  asyncio stream-based│                                           │
-│   └─────────┬────────────┘                                           │
-│             │ HTTP POST /api/analyze                                  │
-│             ▼                                                        │
-│   ┌──────────────────────┐     ┌──────────────────┐                  │
-│   │  FASTAPI ENGINE      │────▶│  OLLAMA LLM      │                  │
-│   │  • Pre-filter        │     │  Qwen3-8B        │                  │
-│   │  • Behavioral Engine │     │  Fine-tuned LoRA  │                  │
-│   │  • 12-Dim Scorer     │     │  24GB GPU         │                  │
-│   │  • Alert Writer      │     └──────────────────┘                  │
-│   └─────────┬────────────┘                                           │
-│             │ WebSocket                                               │
-│             ▼                                                        │
-│   ┌──────────────────────┐     ┌──────────────────┐                  │
-│   │  REACT DASHBOARD     │     │  BROWSER EXT     │                  │
-│   │  :3000               │     │  Gmail Intercept │                  │
-│   └──────────────────────┘     └──────────────────┘                  │
+│   │  REACT DASHBOARD     │                                           │
+│   │  :4297               │                                           │
+│   │  Threat gauge, radar,│                                           │
+│   │  heatmap, alert feed │                                           │
+│   └──────────────────────┘                                           │
 └──────────────────────────────────────────────────────────────────────┘
 ```
+
+**Network isolation:** Ollama runs on a Docker-internal bridge network (`internal: true`) with no internet access. Only the API can reach it.
 
 ---
 
@@ -143,13 +150,15 @@ docker compose exec ollama ollama pull qwen3:8b
 
 ```bash
 # API health check
-curl http://localhost:8000/health
+curl http://localhost:5297/health
+# Expected: {"status":"ok"}
 
 # Dashboard
-open http://localhost:3000
+open http://localhost:4297
+# Login: admin / MindWall@2026
 
-# Ollama model status
-curl http://localhost:11434/api/tags
+# Check Ollama model is loaded
+docker compose exec ollama ollama list
 ```
 
 ---
@@ -158,43 +167,17 @@ curl http://localhost:11434/api/tags
 
 | Service | Container | Port | Description |
 |---------|-----------|------|-------------|
-| **API Engine** | `mindwall-api` | `8000` | FastAPI core — analysis pipeline, REST API, WebSocket |
-| **Dashboard** | `mindwall-ui` | `3000` | React 18 real-time threat monitoring UI |
-| **Ollama** | `mindwall-ollama` | `11434` | Local LLM inference server (Qwen3-8B) |
-| **IMAP Proxy** | `mindwall-proxy` | `1143` | Transparent IMAP proxy with email interception |
-| **SMTP Proxy** | `mindwall-proxy` | `1025` | SMTP relay with outbound analysis |
+| **API Engine** | `mindwall-api` | `5297` | FastAPI — 10-stage analysis pipeline, REST API, WebSocket |
+| **Dashboard** | `mindwall-ui` | `4297` | React 18 real-time threat monitoring UI |
+| **Ollama** | `mindwall-ollama` | _internal only_ | LLM inference server (Qwen3-8B), not exposed to host |
+| **IMAP Proxy** | `mindwall-proxy` | `1143` | Transparent IMAP proxy with email analysis + subject badge injection |
+| **SMTP Proxy** | `mindwall-proxy` | `1025` | SMTP relay with upstream auto-resolve |
 
 ---
 
-## Configuration
+## Email Client Setup
 
-All configuration is managed through environment variables in `.env`:
-
-```dotenv
-# API
-API_SECRET_KEY=<generated-secret>
-DATABASE_URL=sqlite+aiosqlite:////app/data/db/mindwall.db
-OLLAMA_BASE_URL=http://ollama:11434
-OLLAMA_MODEL=qwen3:8b
-OLLAMA_TIMEOUT_SECONDS=30
-LOG_LEVEL=INFO
-WORKERS=4
-
-# Proxy
-IMAP_LISTEN_HOST=0.0.0.0
-IMAP_LISTEN_PORT=1143
-SMTP_LISTEN_HOST=0.0.0.0
-SMTP_LISTEN_PORT=1025
-
-# Alert Thresholds
-ALERT_MEDIUM_THRESHOLD=35
-ALERT_HIGH_THRESHOLD=60
-ALERT_CRITICAL_THRESHOLD=80
-```
-
-### Email Client Configuration
-
-Point your email client's IMAP server to MindWall's proxy:
+MindWall's proxy auto-resolves the upstream mail server from the API when you log in. Configure your email client:
 
 | Setting | Value |
 |---------|-------|
@@ -202,292 +185,201 @@ Point your email client's IMAP server to MindWall's proxy:
 | **IMAP Port** | `1143` |
 | **SMTP Server** | `localhost` |
 | **SMTP Port** | `1025` |
-| **Security** | STARTTLS (proxy handles upstream TLS) |
-| **Credentials** | Your real email credentials (passed through) |
+| **Encryption** | **None** |
+| **Username** | Your real email address |
+| **Password** | Your real email password (app password for Gmail) |
 
----
+> **Why "None" for encryption?** The connection from your client to the proxy is localhost-only. The proxy opens a TLS connection to the upstream server (e.g. `imap.gmail.com:993`).
 
-## API Reference
+**Before configuring your email client**, add the employee and their email account in the dashboard (Employees page) so the proxy knows which upstream server to connect to.
 
-### Analysis Endpoint
-
-```http
-POST /api/analyze
-Content-Type: application/json
-X-API-Key: <API_SECRET_KEY>
-
-{
-  "sender": "sender@example.com",
-  "recipient": "employee@company.com",
-  "subject": "Urgent: Action Required Immediately",
-  "body": "...",
-  "source": "imap_proxy"
-}
-```
-
-**Response:**
-
-```json
-{
-  "analysis_id": "uuid",
-  "overall_score": 72,
-  "verdict": "block",
-  "dimensions": {
-    "urgency_exploitation": 85,
-    "authority_fabrication": 60,
-    "emotional_coercion": 70,
-    "social_proof_manufacturing": 15,
-    "scarcity_fomo": 80,
-    "reciprocity_trap": 10,
-    "commitment_escalation": 45,
-    "identity_manipulation": 30,
-    "information_asymmetry": 55,
-    "trust_exploitation": 65,
-    "cognitive_overload": 40,
-    "isolation_tactics": 20
-  },
-  "explanation": "High urgency exploitation combined with authority fabrication...",
-  "recommended_action": "block",
-  "confidence": 0.87
-}
-```
-
-### Dashboard Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/dashboard/stats` | Aggregate threat statistics |
-| `GET` | `/api/dashboard/threats` | Recent threat timeline |
-| `GET` | `/api/alerts` | Paginated alert list |
-| `GET` | `/api/alerts/{id}` | Single alert detail |
-| `PATCH` | `/api/alerts/{id}` | Update alert status |
-| `GET` | `/api/employees` | Employee risk profiles |
-| `GET` | `/api/employees/{id}` | Individual employee detail |
-| `GET` | `/api/settings` | Current system settings |
-| `PUT` | `/api/settings` | Update thresholds/config |
-| `WS` | `/ws/alerts` | Real-time alert stream |
-
-### Health Check
-
-```http
-GET /health
-```
+See [docs/email-client-setup.md](docs/email-client-setup.md) for step-by-step instructions for Thunderbird, Outlook, and Apple Mail.
 
 ---
 
 ## Scoring System
 
-MindWall analyzes communications across **12 manipulation dimensions**, each scored 0–100:
+Emails are scored across **12 psychological manipulation dimensions** (0–100 each), combined into a weighted aggregate score:
 
-| Score Range | Classification | Action |
-|-------------|---------------|--------|
-| 0–15 | No detectable signal | Proceed |
-| 16–35 | Weak / incidental | Proceed |
-| 36–60 | Moderate / deliberate | Verify |
-| 61–80 | Strong / coordinated | Block |
-| 81–100 | Definitive / adversarial | Block |
+| Score Range | Severity | Action | Alert Created |
+|-------------|----------|--------|---------------|
+| 0 – 34 | Low | Proceed | No |
+| 35 – 59 | Medium | Verify | Yes |
+| 60 – 79 | High | Verify | Yes |
+| 80 – 100 | Critical | Block | Yes |
 
 ### The 12 Dimensions
 
-1. **Urgency Exploitation** — Artificial time pressure to bypass rational evaluation
-2. **Authority Fabrication** — False or inflated authority claims
-3. **Emotional Coercion** — Fear, guilt, flattery to override logical thinking
-4. **Social Proof Manufacturing** — Fabricated consensus or third-party endorsements
-5. **Scarcity / FOMO** — Artificial scarcity or fear of missing out
-6. **Reciprocity Trap** — Unsolicited favors creating obligation pressure
-7. **Commitment Escalation** — Small agreements leveraged into larger compliance
-8. **Identity Manipulation** — Targeting role, values, or in-group identity
-9. **Information Asymmetry** — Deliberate ambiguity or information withholding
-10. **Trust Exploitation** — Leveraging established relationships or institutional trust
-11. **Cognitive Overload** — Excessive detail/complexity to impair judgment
-12. **Isolation Tactics** — Discouraging external consultation or verification
+| # | Dimension | Weight | Description |
+|---|-----------|--------|-------------|
+| 1 | **Authority Impersonation** | 0.15 | Falsely claiming or implying authority, rank, or official capacity |
+| 2 | **Artificial Urgency** | 0.12 | Manufactured time pressure to rush decision-making |
+| 3 | **Fear/Threat Induction** | 0.12 | Using threats, consequences, or fear to compel action |
+| 4 | **Sender Behavioral Deviation** | 0.12 | Deviation from sender's typical communication patterns |
+| 5 | **Cross-Channel Coordination** | 0.08 | Evidence of coordinated multi-channel social engineering |
+| 6 | **Reciprocity Exploitation** | 0.07 | Leveraging past favors or obligations |
+| 7 | **Scarcity Tactics** | 0.07 | Creating false scarcity of time, resource, or opportunity |
+| 8 | **Emotional Escalation** | 0.07 | Escalating emotional intensity to override rational thinking |
+| 9 | **Social Proof Manipulation** | 0.06 | Fabricating consensus or social validation |
+| 10 | **Request/Context Mismatch** | 0.06 | Request inconsistent with stated context |
+| 11 | **Unusual Action Requested** | 0.05 | Actions atypical for legitimate business communication |
+| 12 | **Timing Anomaly** | 0.03 | Suspicious timing relative to sender's patterns |
 
 ---
 
 ## Browser Extension
 
-The MindWall browser extension intercepts emails in Gmail's web interface using a Manifest V3 architecture.
+The MindWall Chrome extension monitors Gmail's web interface in real time:
 
-### Installation (Developer Mode)
+1. Open Chrome → `chrome://extensions/` → Enable Developer mode
+2. Click **Load unpacked** → Select the `extension/` folder
+3. Set the API key via `chrome.storage.local`
+4. Open Gmail — emails are automatically analysed with badges injected
 
-1. Open Chrome → `chrome://extensions/`
-2. Enable **Developer mode** (top right)
-3. Click **Load unpacked**
-4. Select the `extension/` folder
-5. The extension will inject threat scores into Gmail's email view
+See [docs/browser-extension.md](docs/browser-extension.md) for detailed setup.
 
-### How It Works
+---
 
-- Uses `MutationObserver` to detect when emails are opened in Gmail
-- Extracts email content from the DOM
-- Sends content to `localhost:8000/api/analyze`
-- Injects a visual threat indicator badge into the email header
+## Dashboard
+
+Access the monitoring dashboard at `http://localhost:4297`:
+
+- **Login**: `admin` / `MindWall@2026` (configurable via `.env`)
+- **Overview**: Threat gauge, timeline chart, dimension radar, risk heatmap
+- **Alerts**: Filterable alert feed with severity badges, dimension breakdowns, acknowledge actions
+- **Employees**: Employee management, email account configuration, per-employee risk profiles
+- **Settings**: Runtime-adjustable thresholds, weights, and LLM configuration
+
+Real-time updates via WebSocket — new alerts appear instantly.
+
+See [docs/dashboard.md](docs/dashboard.md) for full documentation.
+
+---
+
+## API Reference
+
+**Base URL**: `http://localhost:5297`  
+**Auth Header**: `X-MindWall-Key: your-api-secret-key`
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/analyze` | Submit email for manipulation analysis |
+| `GET` | `/api/dashboard/summary` | Organisation-wide threat statistics |
+| `GET` | `/api/dashboard/timeline` | Threat score timeline |
+| `GET` | `/api/alerts` | Paginated alert list (filter by severity/status) |
+| `GET` | `/api/alerts/{id}` | Full alert detail with dimension breakdown |
+| `PATCH` | `/api/alerts/{id}/acknowledge` | Mark alert as reviewed |
+| `GET` | `/api/employees` | Employee list with risk scores |
+| `POST` | `/api/employees` | Create employee + configure email account |
+| `DELETE` | `/api/employees/{id}` | Delete employee |
+| `GET` | `/api/employees/{email}/risk-profile` | Per-employee risk profile |
+| `GET` | `/api/settings` | Current system settings |
+| `PUT` | `/api/settings` | Update thresholds/weights at runtime |
+| `POST` | `/auth/login` | Dashboard login → returns API key |
+| `WS` | `/ws/alerts` | Real-time alert stream |
+
+See [docs/api-reference.md](docs/api-reference.md) for complete request/response documentation.
 
 ---
 
 ## Fine-Tuning
 
-MindWall includes a complete fine-tuning pipeline using Qwen3-4B-Instruct-2507 with QLoRA via Unsloth. The base runtime uses Qwen3-8B for inference via Ollama.
-
-### Requirements
-
-- NVIDIA GPU with 8GB+ VRAM
-- Python 3.11+
-- ~10GB disk for model weights
-
-### Pipeline
+MindWall includes a complete QLoRA fine-tuning pipeline for training a specialised Qwen3-4B model:
 
 ```bash
 cd finetune
-
-# 1. Install dependencies
 pip install -r requirements.txt
 
-# 2. Generate synthetic training data
-python datasets/synthetic_generator.py
-
-# 3. Prepare dataset (format + split)
-python prepare_dataset.py
-
-# 4. Train with QLoRA
-python train.py
-
-# 5. Evaluate on held-out test set
-python evaluate.py
-
-# 6. Export to GGUF for Ollama
-python export.py
-
-# 7. Load into Ollama
-ollama create mindwall-qwen3-4b -f Modelfile
+python datasets/synthetic_generator.py    # Generate 20K synthetic emails
+python prepare_dataset.py                 # Format into ChatML
+python train.py                           # Train with QLoRA (8GB VRAM)
+python evaluate.py                        # Evaluate on held-out test set
+python export.py                          # Export to GGUF
 ```
 
-### Training Configuration
+**Key config** (`finetune/configs/qlora_config.yaml`):
+- Base model: `unsloth/Qwen3-4B-Instruct-2507-bnb-4bit`
+- LoRA: r=8, alpha=16, targets all attention + MLP layers
+- Training: 3 epochs, batch=1 × 16 accumulation, lr=2e-4, cosine schedule
+- Export: q4_k_m GGUF quantization for Ollama
 
-The QLoRA configuration is in `finetune/configs/qlora_config.yaml`:
+See [docs/fine-tuning.md](docs/fine-tuning.md) for the full pipeline guide.
 
-- **Base model:** `unsloth/Qwen3-4B-Instruct-2507-bnb-4bit`
-- **LoRA rank:** 64
-- **LoRA alpha:** 128
-- **Target modules:** `q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj`
-- **Quantization:** 4-bit NF4
-- **Batch size:** 4 (gradient accumulation: 8)
-- **Learning rate:** 2e-4
-- **Epochs:** 3
-- **Max sequence length:** 4096
+---
+
+## Configuration
+
+All configuration via environment variables in `.env`:
+
+```dotenv
+API_SECRET_KEY=<generated-secret>
+DASHBOARD_USERNAME=admin
+DASHBOARD_PASSWORD=MindWall@2026
+OLLAMA_MODEL=qwen3:8b
+```
+
+Key settings adjustable at runtime (via dashboard or `PUT /api/settings`):
+- Alert thresholds: medium=35, high=60, critical=80
+- Pipeline weights: behavioral=0.6, LLM=0.4
+- LLM timeout, pre-filter boost, log level
+
+See [docs/configuration.md](docs/configuration.md) for all environment variables.
 
 ---
 
 ## Development
 
-### Makefile Commands
-
 ```bash
-make dev          # Start with docker-compose.override.yml (hot reload)
-make up           # Production start
+make dev          # Start with hot-reload (docker-compose.override.yml)
+make prod         # Production deploy
+make build        # Rebuild images
 make down         # Stop all services
-make logs         # Tail all container logs
-make logs-api     # Tail API logs only
-make build        # Rebuild all images
-make test         # Run test suite
-make lint         # Run linters
-make clean        # Remove containers, volumes, data
+make logs         # Follow all logs
+make logs-api     # Follow API logs only
+make test         # Run API test suite
+make lint         # Lint Python code (ruff)
+make pull-model   # Pull Qwen3-8B into Ollama
+make clean        # Full cleanup (containers, volumes, images)
+make db-reset     # Reset database
 ```
 
-### Local API Development
-
-```bash
-cd api
-python -m venv .venv
-source .venv/bin/activate    # Linux/macOS
-.\.venv\Scripts\activate     # Windows
-pip install -r requirements.txt
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
-
-### Local Dashboard Development
-
-```bash
-cd dashboard
-npm install
-npm run dev    # Vite dev server on :3000
-```
-
-### Project Structure
-
-```
-mindwall/
-├── api/                    # FastAPI core engine
-│   ├── analysis/           # LLM pipeline, pre-filter, scorer, behavioral engine
-│   ├── core/               # Config, lifespan, structured logging
-│   ├── db/                 # SQLAlchemy async, models, repositories, migrations
-│   ├── middleware/          # Auth, request ID tracing
-│   ├── routers/            # REST + WebSocket endpoints
-│   ├── schemas/            # Pydantic request/response models
-│   └── websocket/          # Connection manager, event serializers
-├── proxy/                  # IMAP/SMTP transparent proxy
-│   ├── imap/               # IMAP server, parser, interceptor, injector
-│   ├── smtp/               # SMTP server, upstream relay
-│   ├── mime/               # MIME parser, HTML sanitizer
-│   └── ssl/                # TLS termination handler
-├── dashboard/              # React 18 + Vite + Tailwind CSS
-│   └── src/
-│       ├── api/            # REST client, WebSocket hook
-│       ├── components/     # Layout, alerts, dashboard charts, employee views
-│       └── pages/          # Dashboard, Alerts, Employees, Settings
-├── extension/              # Chrome/Firefox Manifest V3 extension
-├── finetune/               # QLoRA fine-tuning pipeline
-│   ├── configs/            # Training hyperparameters
-│   └── datasets/           # Synthetic data generator, download scripts
-├── docker-compose.yml      # Production orchestration
-├── docker-compose.override.yml  # Dev overrides
-├── setup.sh                # Linux/macOS setup
-├── setup.ps1               # Windows PowerShell setup
-├── Makefile                # Task runner
-└── .env.example            # Environment template
-```
+See [docs/development.md](docs/development.md) for the full development guide.
 
 ---
 
-## Troubleshooting
+## Documentation
 
-### Common Issues
+Comprehensive documentation is available in the [`docs/`](docs/) folder:
 
-| Problem | Solution |
-|---------|----------|
-| `nvidia-smi` not found | Install NVIDIA drivers: https://developer.nvidia.com/cuda-downloads |
-| Ollama container unhealthy | Check GPU access: `docker run --rm --gpus all nvidia/cuda:12.0-base nvidia-smi` |
-| Model pull fails | Retry: `docker compose exec ollama ollama pull qwen3:8b` |
-| Port 8000 in use | Change in `.env` and `docker-compose.yml` |
-| IMAP connection refused | Ensure proxy container is running: `docker compose logs proxy` |
-| Dashboard blank | Check API connection: `curl http://localhost:8000/health` |
-| High memory usage | Reduce `OLLAMA_NUM_PARALLEL` in compose file |
-| Slow inference | Ensure GPU passthrough: check `deploy.resources` in compose |
-
-### Logs
-
-```bash
-# All services
-docker compose logs -f
-
-# Specific service
-docker compose logs -f api
-docker compose logs -f ollama
-docker compose logs -f proxy
-docker compose logs -f ui
-```
+| Document | Description |
+|----------|-------------|
+| [Getting Started](docs/getting-started.md) | Prerequisites, setup, verification |
+| [Architecture](docs/architecture.md) | System design, data flow, database schema |
+| [Configuration](docs/configuration.md) | All environment variables and tunable settings |
+| [API Reference](docs/api-reference.md) | Complete HTTP + WebSocket endpoint docs |
+| [Dashboard](docs/dashboard.md) | Monitoring UI guide |
+| [Email Client Setup](docs/email-client-setup.md) | Thunderbird, Outlook, Apple Mail setup |
+| [Browser Extension](docs/browser-extension.md) | Chrome extension installation and usage |
+| [Proxy](docs/proxy.md) | IMAP/SMTP proxy internals |
+| [Analysis Pipeline](docs/analysis-pipeline.md) | 10-stage pipeline deep dive |
+| [Fine-Tuning](docs/fine-tuning.md) | QLoRA training pipeline |
+| [Development](docs/development.md) | Local dev setup, contributing |
+| [Security](docs/security.md) | Auth model, network isolation, data privacy |
+| [Troubleshooting](docs/troubleshooting.md) | Common issues and solutions |
 
 ---
 
 ## Security
 
-MindWall is designed for **internal network deployment only**. See [SECURITY.md](SECURITY.md) for:
+MindWall is designed for **internal network deployment only**. See [SECURITY.md](SECURITY.md) for responsible disclosure policy.
 
-- Responsible disclosure policy
-- Deployment hardening guidelines
-- API authentication details
+- **Authentication**: Shared `X-MindWall-Key` header with constant-time comparison
+- **Network isolation**: Ollama on internal-only Docker network (no internet)
+- **Privacy**: No email bodies persisted, no external API calls, structured logging with no PII
 
-**Important:** Never expose MindWall ports (8000, 3000, 1143, 1025) to the public internet.
+**Important:** Never expose MindWall ports (5297, 4297, 1143, 1025) to the public internet.
+
+See [docs/security.md](docs/security.md) for full security documentation.
 
 ---
 

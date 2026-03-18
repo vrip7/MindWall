@@ -61,6 +61,7 @@ export const api = {
   createEmployee: (data) => client.post('/api/employees', data),
   deleteEmployee: (id) => client.delete(`/api/employees/${id}`),
   getEmployeeRiskProfile: (email) => client.get(`/api/employees/${encodeURIComponent(email)}/risk-profile`),
+  getEmployeeProxyInfo: (email) => client.get(`/api/employees/${encodeURIComponent(email)}/proxy-info`),
 
   // Settings
   getSettings: () => client.get('/api/settings'),

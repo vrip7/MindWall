@@ -5,7 +5,7 @@
  */
 
 const API_BASE = 'http://localhost:5297'
-const API_KEY_STORAGE_KEY = 'mindwall_api_key'
+const API_KEY_STORAGE_KEY = 'CD080A0539991A69FC414E46CC3E7434'
 
 /**
  * Retrieve API key from extension storage
