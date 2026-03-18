@@ -1,0 +1,10 @@
+{
+  "message_uid": "example-legitimate-010",
+  "recipient_email": "sarah.johnson@acme-corp.com",
+  "sender_email": "lisa.chen@acme-corp.com",
+  "sender_display_name": "Lisa Chen",
+  "subject": "Q1 Marketing Report — Draft for Review",
+  "body": "Hi Sarah,\n\nAttached is the Q1 marketing performance report we discussed in yesterday's team meeting. I've included the updated campaign metrics and the budget reconciliation numbers from Finance.\n\nKey highlights:\n- Email campaigns achieved 24.3% open rate (up from 21.1% in Q4)\n- Social media engagement increased 15% quarter-over-quarter\n- The product launch webinar had 340 registrations, 198 attendees\n- We're currently 4% under budget for Q1\n\nCould you review the executive summary section (pages 2-3) and let me know if the messaging aligns with what we want to present to leadership? I'd like to finalize it by Friday so we can include it in the board deck.\n\nNo rush — whenever you get a chance this week is fine.\n\nAlso, are we still on for lunch Thursday at the usual place?\n\nThanks,\nLisa\n\nLisa Chen\nMarketing Manager\nAcme Corporation\nExt. 2847",
+  "channel": "imap",
+  "received_at": "2026-03-18T10:15:00Z"
+}

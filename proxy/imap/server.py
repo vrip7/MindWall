@@ -10,6 +10,7 @@ subject lines before returning to the email client.
 import asyncio
 import base64
 import re
+import uuid
 from typing import Optional
 
 import httpx
@@ -24,6 +25,15 @@ logger = structlog.get_logger(__name__)
 
 # Regex to parse quoted or unquoted tokens from IMAP LOGIN arguments
 _TOKEN_RE = re.compile(r'"([^"\\]*(?:\\.[^"\\]*)*)"|(\S+)')
+
+# Regex to detect IMAP literal markers  {N}  or  {N+}  at end of raw line bytes
+_LITERAL_RE = re.compile(rb'\{(\d+)\+?\}\r?\n$')
+
+# Regex to identify FETCH responses that contain BODY/RFC822 data
+_FETCH_BODY_RE = re.compile(
+    rb'^\*\s+\d+\s+FETCH\b.*(?:BODY\[|RFC822)',
+    re.IGNORECASE,
+)
 
 
 def _parse_login_args(args: str) -> tuple[Optional[str], Optional[str]]:
@@ -104,6 +114,7 @@ class MindWallIMAPServer:
         logger.info("imap.client_connected", peer=str(peer))
 
         upstream = None
+        got_command = False
 
         try:
             # Send IMAP greeting to client
@@ -114,11 +125,37 @@ class MindWallIMAPServer:
             upstream_port = None
 
             while True:
-                line = await asyncio.wait_for(client_reader.readline(), timeout=300)
-                if not line:
+                raw = await asyncio.wait_for(client_reader.readline(), timeout=300)
+                if not raw:
+                    if not got_command:
+                        # Client disconnected without sending any command.
+                        # This almost always means the email client is configured
+                        # with SSL/TLS or STARTTLS encryption.  The proxy only
+                        # accepts plaintext — set "None" / "No encryption".
+                        logger.warning(
+                            "imap.tls_mismatch_suspected",
+                            peer=str(peer),
+                            hint="Client disconnected immediately without sending any "
+                                 "command. This usually means the email client is "
+                                 "configured with SSL/TLS or STARTTLS encryption. "
+                                 "Set connection security to 'None' for localhost.",
+                        )
                     break
 
-                decoded = line.decode("utf-8", errors="replace").strip()
+                got_command = True
+
+                # Detect TLS ClientHello (byte 0x16) — client tried direct TLS
+                if raw[0:1] == b"\x16":
+                    logger.warning(
+                        "imap.tls_handshake_rejected",
+                        peer=str(peer),
+                        hint="Client sent a TLS ClientHello. The MindWall IMAP proxy "
+                             "runs plaintext on localhost. Set connection security to "
+                             "'None' in your email client.",
+                    )
+                    break
+
+                decoded = raw.decode("utf-8", errors="replace").strip()
                 logger.debug("imap.client_command", command=decoded[:100])
 
                 # Parse the command
@@ -348,51 +385,240 @@ class MindWallIMAPServer:
 
     async def _pipe(self, client_reader, client_writer, upstream):
         """
-        Bidirectional pipe between client and upstream.
-        Intercepts FETCH responses at the data level.
-        """
-        client_to_upstream = asyncio.create_task(
-            self._forward_client_commands(client_reader, upstream)
-        )
-        upstream_to_client = asyncio.create_task(
-            self._forward_upstream_responses(upstream, client_writer)
-        )
-        done, pending = await asyncio.wait(
-            [client_to_upstream, upstream_to_client],
-            return_when=asyncio.FIRST_COMPLETED,
-        )
-        for task in pending:
-            task.cancel()
+        Bidirectional raw-byte pipe between email client and upstream IMAP.
 
-    async def _forward_client_commands(self, client_reader, upstream):
-        """Forward commands from client to upstream IMAP server."""
+        Both directions use raw ``read()`` to avoid any data corruption.
+        A decoupled analysis worker receives teed bytes via an asyncio Queue
+        and scans for FETCH body literals to submit for manipulation analysis.
+        """
+        analysis_queue = asyncio.Queue(maxsize=512)
+
+        c2u = asyncio.create_task(
+            self._pipe_raw(
+                client_reader, upstream._writer, "c2u",
+            )
+        )
+        u2c = asyncio.create_task(
+            self._pipe_raw(
+                upstream._reader, client_writer, "u2c",
+                analysis_queue=analysis_queue,
+            )
+        )
+        analyzer = asyncio.create_task(
+            self._analysis_worker(analysis_queue)
+        )
+
+        try:
+            done, pending = await asyncio.wait(
+                [c2u, u2c], return_when=asyncio.FIRST_COMPLETED,
+            )
+            # Log reason for pipe exit
+            for task in done:
+                exc = task.exception() if not task.cancelled() else None
+                if exc:
+                    logger.warning("imap.pipe_task_error", error=str(exc))
+        finally:
+            c2u.cancel()
+            u2c.cancel()
+            # Signal analyzer to stop
+            try:
+                analysis_queue.put_nowait(None)
+            except asyncio.QueueFull:
+                pass
+            analyzer.cancel()
+
+    async def _pipe_raw(
+        self,
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
+        direction: str,
+        analysis_queue: asyncio.Queue | None = None,
+    ):
+        """
+        Forward raw bytes between two asyncio streams.
+
+        This is the core data-forwarding loop. It reads whatever bytes
+        are available (up to 65 536) and writes them immediately to the
+        other side.  No decoding, no line parsing, no modification.
+        The optional *analysis_queue* receives a copy of every chunk
+        for background FETCH-body scanning.
+        """
+        total_bytes = 0
+        chunks = 0
         try:
             while True:
-                line = await asyncio.wait_for(client_reader.readline(), timeout=600)
-                if not line:
+                data = await asyncio.wait_for(reader.read(65536), timeout=600)
+                if not data:
                     break
-                decoded = line.decode("utf-8", errors="replace").strip()
-                logger.debug("imap.forward_to_upstream", command=decoded[:80])
-                await upstream.send_line(decoded)
-        except (asyncio.CancelledError, asyncio.TimeoutError, ConnectionResetError):
-            pass
+                writer.write(data)
+                await writer.drain()
+                total_bytes += len(data)
+                chunks += 1
 
-    async def _forward_upstream_responses(self, upstream, client_writer):
-        """
-        Reads responses from upstream IMAP.
-        Detects FETCH responses containing RFC822/BODY content.
-        Passes through interceptor before writing to client.
-        """
-        try:
-            async for line in upstream.read_lines():
-                processed = await self.interceptor.process_line(line)
-                if processed:
-                    if isinstance(processed, str):
-                        processed = processed.encode("utf-8", errors="replace")
-                    client_writer.write(processed)
-                    await client_writer.drain()
-        except (asyncio.CancelledError, ConnectionResetError):
+                # Log first few chunks so we can verify data is flowing
+                if chunks <= 3:
+                    preview = data[:200].decode("utf-8", errors="replace").replace("\r\n", "\\r\\n")[:150]
+                    logger.info(
+                        "imap.pipe_data",
+                        direction=direction,
+                        chunk=chunks,
+                        size=len(data),
+                        preview=preview,
+                    )
+
+                # Tee bytes for analysis (upstream→client only)
+                if analysis_queue is not None:
+                    try:
+                        analysis_queue.put_nowait(data)
+                    except asyncio.QueueFull:
+                        pass  # Drop — never slow down mail delivery
+        except asyncio.CancelledError:
             pass
+        except asyncio.TimeoutError:
+            logger.info("imap.pipe_timeout", direction=direction, total_bytes=total_bytes)
+        except (ConnectionResetError, BrokenPipeError, OSError):
+            pass
+        except Exception as e:
+            logger.error("imap.pipe_error", direction=direction, error=str(e))
+        finally:
+            logger.info(
+                "imap.pipe_closed",
+                direction=direction,
+                total_bytes=total_bytes,
+                chunks=chunks,
+            )
+
+    # ------------------------------------------------------------------
+    #  Analysis worker — processes teed upstream bytes to find FETCH
+    #  body literals and submit them for manipulation scoring.
+    # ------------------------------------------------------------------
+
+    async def _analysis_worker(self, queue: asyncio.Queue):
+        """
+        Consume raw upstream bytes from *queue*, reassemble IMAP lines,
+        detect ``{N}`` literals inside FETCH responses, and submit
+        the extracted email bodies for analysis.
+        """
+        line_buf = bytearray()
+        in_literal = False
+        lit_remaining = 0
+        lit_data = bytearray()
+        fetch_line = b""
+
+        try:
+            while True:
+                chunk = await queue.get()
+                if chunk is None:
+                    break
+
+                pos = 0
+                while pos < len(chunk):
+                    # --- Inside a literal: accumulate body bytes ---
+                    if in_literal:
+                        take = min(len(chunk) - pos, lit_remaining)
+                        lit_data.extend(chunk[pos : pos + take])
+                        pos += take
+                        lit_remaining -= take
+                        if lit_remaining <= 0:
+                            asyncio.create_task(
+                                self._analyze_fetched_body(
+                                    fetch_line, bytes(lit_data),
+                                )
+                            )
+                            in_literal = False
+                            lit_data.clear()
+                        continue
+
+                    # --- Line accumulation mode ---
+                    nl_idx = chunk.find(b"\n", pos)
+                    if nl_idx == -1:
+                        # No newline in remainder — buffer and wait
+                        line_buf.extend(chunk[pos:])
+                        break
+
+                    line_buf.extend(chunk[pos : nl_idx + 1])
+                    line = bytes(line_buf)
+                    line_buf.clear()
+                    pos = nl_idx + 1
+
+                    # Check for FETCH literal marker
+                    lit_match = _LITERAL_RE.search(line)
+                    if lit_match and _FETCH_BODY_RE.search(line):
+                        lit_size = int(lit_match.group(1))
+                        if lit_size > 50:
+                            fetch_line = line
+                            in_literal = True
+                            lit_remaining = lit_size
+                            lit_data.clear()
+
+                # Prevent unbounded buffer growth
+                if len(line_buf) > 500_000:
+                    line_buf.clear()
+
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.debug("imap.analysis_worker_error", error=str(e))
+
+    async def _analyze_fetched_body(self, fetch_line: bytes, body_data: bytes):
+        """Parse and submit an intercepted FETCH body for manipulation analysis."""
+        try:
+            body_text = body_data.decode("utf-8", errors="replace")
+
+            # Parse MIME to extract clean text content
+            parsed = self.interceptor.mime_parser.parse(body_text)
+            clean_text = self.interceptor.sanitizer.sanitize(
+                parsed.text_content or parsed.html_content or ""
+            )
+            if not clean_text or len(clean_text.strip()) <= 20:
+                return
+
+            # Extract metadata from FETCH line + RFC822 headers
+            headers_data = self.interceptor.parser.parse_headers(body_text)
+            uid_match = re.search(rb'UID\s+(\d+)', fetch_line, re.IGNORECASE)
+            uid = uid_match.group(1).decode() if uid_match else str(uuid.uuid4())
+
+            received_at = None
+            if headers_data.received_date:
+                try:
+                    from dateutil.parser import parse as parse_date
+                    received_at = parse_date(headers_data.received_date).isoformat()
+                except Exception:
+                    pass
+
+            payload = {
+                "message_uid": uid,
+                "recipient_email": headers_data.to_address or "unknown@unknown",
+                "sender_email": headers_data.from_address or "unknown@unknown",
+                "sender_display_name": headers_data.from_display or "",
+                "subject": headers_data.subject or "",
+                "body": clean_text[:8000],
+                "channel": "imap",
+                "received_at": received_at,
+            }
+
+            response = await self.interceptor._http_client.post(
+                "/api/analyze",
+                json=payload,
+                headers={"X-MindWall-Key": self.interceptor.api_secret_key},
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                logger.info(
+                    "imap.analysis_complete",
+                    uid=uid,
+                    score=result.get("manipulation_score"),
+                    severity=result.get("severity"),
+                )
+            else:
+                logger.warning(
+                    "imap.analysis_failed",
+                    uid=uid,
+                    status=response.status_code,
+                )
+        except Exception as e:
+            logger.debug("imap.analysis_error", error=str(e))
 
     async def start(self):
         """Start the IMAP proxy server."""

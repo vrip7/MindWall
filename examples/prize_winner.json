@@ -1,0 +1,10 @@
+{
+  "message_uid": "example-prize-winner-004",
+  "recipient_email": "user@example.com",
+  "sender_email": "winners@international-promotions-board.com",
+  "sender_display_name": "International Online Promotions Board",
+  "subject": "Congratulations! You've Won £850,000.00 in the 2026 International Email Lottery",
+  "body": "CONGRATULATIONS!!!\n\nWe are pleased to inform you that your email address was selected in our annual International Email Lottery draw held on March 15, 2026. You have been awarded the sum of £850,000.00 (Eight Hundred and Fifty Thousand British Pounds).\n\nYour winning details:\n- Ticket Number: IPB-56290-UK\n- Reference Number: BTL/491/02/UK\n- Batch: 24/00918/IPD\n\nTo claim your prize, please contact our Claims Processing Agent within 7 days:\n\nDr. Richard Thompson\nClaims Director\nEmail: claims@international-promotions-board.com\nPhone: +44-702-409-3281\n\nYou will need to provide the following for verification:\n1. Full legal name\n2. Date of birth\n3. Home address\n4. Phone number\n5. Copy of passport or government-issued ID\n6. Processing fee of £750 (refundable upon prize disbursement)\n\nThis lottery is sponsored by Microsoft, Google, and the European Union Commission as part of our social responsibility initiative.\n\nDo not share this notification with anyone to avoid double claims and disqualification.\n\nCongratulations once again!\n\nSincerely,\nSir Alan Pemberton\nInternational Online Promotions Board\nLondon, United Kingdom",
+  "channel": "imap",
+  "received_at": "2026-03-18T05:00:00Z"
+}

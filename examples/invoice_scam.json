@@ -1,0 +1,10 @@
+{
+  "message_uid": "example-invoice-scam-003",
+  "recipient_email": "ap-team@techwidgets.com",
+  "sender_email": "billing@supplierpartners-update.com",
+  "sender_display_name": "Global Office Supplies - Accounts Receivable",
+  "subject": "OVERDUE: Invoice #INV-2026-4891 — Payment Required Within 48 Hours to Avoid Service Interruption",
+  "body": "Dear Accounts Payable,\n\nThis is a final reminder that Invoice #INV-2026-4891 for $12,340.00 is now 15 days overdue. As per our service agreement (Section 4.2), failure to remit payment within 48 hours will result in:\n\n1. Immediate suspension of all supply deliveries\n2. Application of 18% late payment penalty\n3. Referral to our collections agency\n\nIMPORTANT — UPDATED BANKING DETAILS:\n\nPlease note that we have recently changed our banking provider. All payments must now be sent to our new account:\n\nBank: Wells Fargo Business\nRouting Number: 121000248\nAccount Number: 7293018456\nAccount Name: Global Office Supplies LLC\n\nDo NOT send payment to our previous account — it has been closed and funds will be returned, causing further delays.\n\nPlease process this payment immediately and reply with the wire transfer confirmation number.\n\nRegards,\n\nDavid Chen\nAccounts Receivable Manager\nGlobal Office Supplies\nPhone: (555) 392-8100\nEmail: billing@supplierpartners-update.com",
+  "channel": "imap",
+  "received_at": "2026-03-17T14:22:00Z"
+}

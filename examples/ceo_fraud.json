@@ -1,0 +1,10 @@
+{
+  "message_uid": "example-ceo-fraud-001",
+  "recipient_email": "accounting@acme-corp.com",
+  "sender_email": "ceo.james.mitchell@acme-corp.com",
+  "sender_display_name": "James Mitchell - CEO",
+  "subject": "URGENT: Wire Transfer Needed Before End of Day",
+  "body": "Hi,\n\nI need you to process an urgent wire transfer of $47,500 to a new vendor before close of business today. This is for a confidential acquisition we're finalizing and I need this handled immediately.\n\nPlease use these details:\n\nBank: First National Trust\nRouting: 021000089\nAccount: 483920174\nBeneficiary: Meridian Consulting Group LLC\n\nDo NOT discuss this with anyone else on the team — the deal is under NDA and we cannot risk a leak. I'm in meetings all day and can't take calls, so just process it and send me confirmation by email.\n\nThis needs to happen TODAY. If we miss the deadline, we lose the deal entirely.\n\nThanks for handling this quickly.\n\nJames Mitchell\nChief Executive Officer\nAcme Corporation",
+  "channel": "imap",
+  "received_at": "2026-03-18T08:15:00Z"
+}

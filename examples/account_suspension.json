@@ -1,0 +1,10 @@
+{
+  "message_uid": "example-account-suspension-002",
+  "recipient_email": "user@example.com",
+  "sender_email": "security-alert@microsoftonline-verify.com",
+  "sender_display_name": "Microsoft Account Security",
+  "subject": "ACTION REQUIRED: Your Microsoft 365 Account Will Be Suspended in 24 Hours",
+  "body": "Dear Valued Customer,\n\nOur security systems have detected unusual sign-in activity on your Microsoft 365 account. To protect your data, your account will be permanently suspended within 24 hours unless you verify your identity immediately.\n\nDetected suspicious activity:\n- Sign-in from unrecognized device in Lagos, Nigeria (March 17, 2026)\n- 3 failed password attempts from IP 197.210.xx.xx\n- Attempted mailbox rule modification\n\nTo prevent account suspension and data loss, you must verify your identity now:\n\nhttps://microsoftonline-verify.com/security/verify?user=dXNlckBleGFtcGxlLmNvbQ\n\nIf you do not complete verification within 24 hours:\n- Your account will be permanently locked\n- All emails, files, and OneDrive data will be deleted\n- You will lose access to all Microsoft services\n\nThis is an automated security notification. Do not reply to this email.\n\nMicrosoft Account Protection Team\nOne Microsoft Way, Redmond, WA 98052",
+  "channel": "imap",
+  "received_at": "2026-03-18T02:30:00Z"
+}

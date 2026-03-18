@@ -1,0 +1,10 @@
+{
+  "message_uid": "example-shipping-007",
+  "recipient_email": "user@example.com",
+  "sender_email": "delivery-notification@fedex-tracking-update.com",
+  "sender_display_name": "FedEx Delivery Services",
+  "subject": "FedEx: Your Package Will Be Returned to Sender — Action Required Today",
+  "body": "FedEx Shipment Notification\n\nTracking Number: 7284 9102 3847\nStatus: DELIVERY EXCEPTION — Address Verification Needed\n\nDear Customer,\n\nWe attempted to deliver your package today but were unable to complete delivery due to an incomplete shipping address. This is your FINAL NOTICE before the package is returned to the sender.\n\nPackage Details:\n- Tracking: 7284 9102 3847\n- Weight: 2.4 lbs\n- Sender: Amazon Marketplace\n- Estimated Value: $289.99\n\nTo update your delivery address and schedule redelivery, please confirm your information within 24 hours:\n\nhttps://fedex-tracking-update.com/redelivery?track=728491023847\n\nYou will need to verify:\n- Full name\n- Complete delivery address\n- Phone number\n- Payment of $3.99 redelivery fee (credit/debit card)\n\nIf we do not hear from you by March 19, 2026, the package will be returned to the sender and you will need to contact them for a refund or re-shipment.\n\nThank you for choosing FedEx.\n\nFedEx Customer Support\nfedex.com | 1-800-463-3339",
+  "channel": "imap",
+  "received_at": "2026-03-18T11:05:00Z"
+}

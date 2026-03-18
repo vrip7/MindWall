@@ -132,3 +132,9 @@ For answers to common questions about this code of conduct, see the FAQ at
 [Mozilla CoC]: https://github.com/mozilla/diversity
 [FAQ]: https://www.contributor-covenant.org/faq
 [translations]: https://www.contributor-covenant.org/translations
+
+---
+
+**[MindWall](https://github.com/vrip7/mindwall)** — Cognitive Firewall, AI-Powered Human Manipulation Detection
+
+Maintained by [Pradyumn Tandon](https://pradyumntandon.com) at [VRIP7](https://vrip7.com)

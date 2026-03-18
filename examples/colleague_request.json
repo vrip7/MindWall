@@ -1,0 +1,10 @@
+{
+  "message_uid": "example-colleague-request-006",
+  "recipient_email": "sarah.johnson@acme-corp.com",
+  "sender_email": "mike.reynolds-personal@gmail.com",
+  "sender_display_name": "Mike Reynolds",
+  "subject": "Quick favor needed — can you help me out?",
+  "body": "Hey Sarah,\n\nHope you're doing well! I'm reaching out from my personal email because I'm having issues with my corporate account (IT is aware and working on it).\n\nI need a quick favor. I'm organizing a surprise appreciation event for the team this Friday, and I need to pick up some gift cards for everyone. The problem is I'm stuck in client meetings until late tonight and the event is tomorrow.\n\nCould you help me out by purchasing 10 Apple gift cards at $100 each ($1,000 total) from any nearby store? I'll reimburse you first thing tomorrow morning — I can Venmo you or submit an expense reimbursement through Finance.\n\nOnce you have them, just take photos of the front and back of each card and send them to me here. I need to get the codes loaded into the event app tonight so everything is ready for the surprise.\n\nEveryone on the team including David, Lisa, and the rest of the marketing group already chipped in — you're the last person I need help from.\n\nReally appreciate it! Let me know ASAP.\n\nThanks,\nMike Reynolds\nVP of Sales, Acme Corp",
+  "channel": "imap",
+  "received_at": "2026-03-18T16:30:00Z"
+}

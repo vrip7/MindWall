@@ -1,0 +1,10 @@
+{
+  "message_uid": "example-tax-refund-008",
+  "recipient_email": "taxpayer@example.com",
+  "sender_email": "refunds@irs-tax-notification.com",
+  "sender_display_name": "Internal Revenue Service - Tax Refund Division",
+  "subject": "IRS Notice: You Have an Unclaimed Tax Refund of $4,218.36",
+  "body": "Department of the Treasury\nInternal Revenue Service\n\nTax Refund Notification\nNotice Number: CP-2026-49182-R\nTax Year: 2025\n\nDear Taxpayer,\n\nAfter a review of your 2025 tax return, we have determined that you are entitled to a refund of $4,218.36 due to a miscalculation in your original filing. This refund has been pending for 90 days and must be claimed before April 1, 2026, or it will be forfeited.\n\nTo claim your refund, you must verify your identity and provide your direct deposit information through our secure online portal:\n\nhttps://irs-tax-notification.com/refund-claim/verify\n\nInformation required for processing:\n1. Social Security Number (SSN)\n2. Date of birth\n3. 2025 Adjusted Gross Income (AGI)\n4. Bank routing and account number for direct deposit\n5. Copy of government-issued photo ID\n\nPlease note:\n- This refund cannot be claimed by phone or mail due to the expedited timeline\n- The IRS will never ask for this information via email (this is an exception for the expedited refund program)\n- Processing takes 3-5 business days after verification\n\nIf you believe you've received this notice in error, please disregard.\n\nSincerely,\n\nRobert A. Manning\nDirector, Refund Processing Division\nInternal Revenue Service\n1111 Constitution Ave NW, Washington, DC 20224\n\nRef: IRS Form 1040-EZ-R | Privacy Act Notice: See IRS.gov/privacy",
+  "channel": "imap",
+  "received_at": "2026-03-17T18:00:00Z"
+}

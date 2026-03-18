@@ -60,7 +60,7 @@ class WebSocketManager:
         if self._active_connections:
             logger.debug(
                 "ws_manager.broadcast",
-                event=message.get("event"),
+                event_type=message.get("event"),
                 recipients=len(self._active_connections),
             )
 

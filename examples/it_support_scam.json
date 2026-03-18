@@ -1,0 +1,10 @@
+{
+  "message_uid": "example-it-support-005",
+  "recipient_email": "employee@acme-corp.com",
+  "sender_email": "it-helpdesk@acme-corp-support.com",
+  "sender_display_name": "Acme Corp IT Help Desk",
+  "subject": "CRITICAL: Mandatory Password Reset — Your Account Has Been Compromised",
+  "body": "URGENT SECURITY NOTICE\n\nDear Employee,\n\nOur Security Operations Center has detected that your corporate credentials were exposed in a third-party data breach (CVE-2026-31847). As part of our emergency incident response, ALL employees must reset their passwords within the next 2 hours to prevent unauthorized access to corporate systems.\n\nYour account details:\n- Username: employee@acme-corp.com\n- Status: COMPROMISED — Immediate action required\n- Deadline: March 18, 2026 @ 12:00 PM EST\n\nPlease click the link below to reset your password through our secure portal:\n\nhttps://acme-corp-support.com/password-reset/emergency\n\nDuring the reset process, you will need to:\n1. Enter your current password for verification\n2. Create a new password meeting corporate policy requirements\n3. Re-enter your MFA recovery codes\n\nIMPORTANT: If you do not complete this reset by the deadline:\n- Your account will be automatically locked\n- VPN and email access will be revoked\n- You will need to visit IT in person with government-issued ID to regain access\n\nWe apologize for the inconvenience. This is a mandatory security requirement authorized by the CISO.\n\nDo not forward this email. Each reset link is uniquely tied to your account.\n\nIT Security Team\nAcme Corporation\nExtension: 4500 | Ticket: INC-2026-0892",
+  "channel": "imap",
+  "received_at": "2026-03-18T09:45:00Z"
+}
