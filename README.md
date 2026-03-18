@@ -54,39 +54,41 @@ Traditional email security focuses on malware and phishing links. MindWall detec
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│                    ORGANIZATIONAL NETWORK BOUNDARY                    │
-│                                                                      │
-│   Email Clients (Thunderbird / Outlook / Apple Mail)                 │
-│         │                          ┌──────────────────┐              │
-│         ▼                          │  CHROME EXTENSION │              │
-│   ┌──────────────────────┐         │  Gmail Intercept  │              │
-│   │  IMAP/SMTP PROXY     │         └────────┬─────────┘              │
-│   │  :1143 (IMAP)        │                  │                        │
-│   │  :1025 (SMTP)        │                  │                        │
-│   │  Auto-resolve upstream│                  │                        │
-│   └─────────┬────────────┘                  │                        │
-│             │ POST /api/analyze              │                        │
-│             ▼                               ▼                        │
-│   ┌────────────────────────────────────────────────┐                 │
-│   │  FASTAPI ANALYSIS ENGINE  :5297                │                 │
-│   │  10-stage pipeline:                            │                 │
-│   │  PreFilter → Baseline → Deviation → LLM →     │  ┌────────────┐│
-│   │  Aggregate → Severity → Persist → Alert →  ───┼──│  OLLAMA    ││
-│   │  WebSocket broadcast → Baseline update         │  │  Qwen3-8B ││
-│   │                                                │  │  GPU-only  ││
-│   │  SQLite: data/db/mindwall.db                   │  └────────────┘│
-│   └────────────────┬───────────────────────────────┘                 │
-│                    │ WebSocket                                        │
-│                    ▼                                                  │
-│   ┌──────────────────────┐                                           │
-│   │  REACT DASHBOARD     │                                           │
-│   │  :4297               │                                           │
-│   │  Threat gauge, radar,│                                           │
-│   │  heatmap, alert feed │                                           │
-│   └──────────────────────┘                                           │
-└──────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph boundary["Organizational Network Boundary"]
+        direction TB
+
+        clients["Email Clients\n(Thunderbird / Outlook / Apple Mail)"]
+        ext["Chrome Extension\nGmail Intercept"]
+
+        subgraph proxy["IMAP/SMTP Proxy\n:1143 (IMAP) · :1025 (SMTP)\nAuto-resolve upstream"]
+        end
+
+        subgraph api["FastAPI Analysis Engine :5297"]
+            pipeline["10-stage pipeline:\nPreFilter → Baseline → Deviation → LLM →\nAggregate → Severity → Persist → Alert →\nWebSocket broadcast → Baseline update"]
+            db[("SQLite\ndata/db/mindwall.db")]
+        end
+
+        subgraph ollama["Ollama\nQwen3-8B · GPU-only"]
+        end
+
+        subgraph dashboard["React Dashboard :4297\nThreat gauge, radar,\nheatmap, alert feed"]
+        end
+
+        clients -->|"plain :1143 / :1025"| proxy
+        proxy -->|"POST /api/analyze"| api
+        ext -->|"POST /api/analyze"| api
+        pipeline <-->|"GPU inference"| ollama
+        api -->|"WebSocket"| dashboard
+    end
+
+    style boundary fill:none,stroke:#6366f1,stroke-width:2px
+    style proxy fill:#dbeafe,stroke:#3b82f6
+    style api fill:#f0fdf4,stroke:#22c55e
+    style ollama fill:#fef3c7,stroke:#f59e0b
+    style dashboard fill:#ede9fe,stroke:#8b5cf6
+    style ext fill:#fce7f3,stroke:#ec4899
 ```
 
 **Network isolation:** Ollama runs on a Docker-internal bridge network (`internal: true`) with no internet access. Only the API can reach it.
