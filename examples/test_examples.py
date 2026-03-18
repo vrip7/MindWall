@@ -1,4 +1,4 @@
-k"""
+"""
 MindWall — Example Phishing Email Test Runner
 
 Submits all example emails to the MindWall API and displays analysis results.

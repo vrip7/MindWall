@@ -57,7 +57,7 @@ class AlertDetail(BaseModel):
 
 class AlertAcknowledgeRequest(BaseModel):
     """Request to acknowledge an alert."""
-    acknowledged_by: str = Field(..., description="Name or email of the person acknowledging")
+    acknowledged_by: str = Field(default="admin", description="Name or email of the person acknowledging")
 
 
 class AlertPaginatedResponse(BaseModel):

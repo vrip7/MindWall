@@ -24,6 +24,7 @@ services:
               capabilities: [gpu]
     networks:
       - mindwall-internal
+      - mindwall-host          # Needs internet access to pull models from registry.ollama.ai
     healthcheck:
       test: ["CMD-SHELL", "ollama list >/dev/null 2>&1"]
       interval: 15s
@@ -59,9 +60,10 @@ services:
       - mindwall-host
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5297/health"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
 
   # ── IMAP/SMTP Proxy ───────────────────────────────────────────────────
   proxy:

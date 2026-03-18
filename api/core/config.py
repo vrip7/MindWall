@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     # Ollama LLM
     ollama_base_url: str = "http://ollama:11434"
     ollama_model: str = "qwen3:8b"
-    ollama_timeout_seconds: int = 30
+    ollama_timeout_seconds: int = 120
 
     # Alert Thresholds
     alert_medium_threshold: float = 35.0

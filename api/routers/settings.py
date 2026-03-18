@@ -3,6 +3,7 @@ MindWall — Settings Router
 Developed by Pradyumn Tandon (https://pradyumntandon.com) at VRIP7 (https://vrip7.com)
 
 GET/PUT /api/settings — System configuration management.
+Settings are persisted to the database and survive restarts.
 """
 
 from typing import Optional
@@ -43,6 +44,19 @@ class SettingsUpdateRequest(BaseModel):
     log_level: Optional[str] = Field(None, pattern="^(DEBUG|INFO|WARNING|ERROR)$")
 
 
+# Keys that map to the Settings object attributes persisted in DB
+_PERSISTABLE_KEYS = [
+    "ollama_timeout_seconds",
+    "alert_medium_threshold",
+    "alert_high_threshold",
+    "alert_critical_threshold",
+    "prefilter_score_boost",
+    "behavioral_weight",
+    "llm_weight",
+    "log_level",
+]
+
+
 @router.get("", response_model=SystemSettings)
 async def get_settings(request: Request) -> SystemSettings:
     """Get current system settings."""
@@ -70,14 +84,31 @@ async def update_settings(
 ) -> SystemSettings:
     """
     Update system settings.
-    Note: Some settings require service restart to take effect.
-    Runtime-modifiable settings are applied immediately.
+    Changes are applied immediately to the running app and persisted to the database.
     """
     settings = request.app.state.settings
+    settings_repo = request.app.state.settings_repo
 
+    changes = payload.model_dump(exclude_none=True)
+
+    if not changes:
+        return SystemSettings(
+            ollama_base_url=settings.ollama_base_url,
+            ollama_model=settings.ollama_model,
+            ollama_timeout_seconds=settings.ollama_timeout_seconds,
+            alert_medium_threshold=settings.alert_medium_threshold,
+            alert_high_threshold=settings.alert_high_threshold,
+            alert_critical_threshold=settings.alert_critical_threshold,
+            prefilter_score_boost=settings.prefilter_score_boost,
+            behavioral_weight=settings.behavioral_weight,
+            llm_weight=settings.llm_weight,
+            log_level=settings.log_level,
+            workers=settings.workers,
+        )
+
+    # Apply to in-memory settings
     if payload.ollama_timeout_seconds is not None:
         settings.ollama_timeout_seconds = payload.ollama_timeout_seconds
-        # Update LLM client timeout
         request.app.state.llm_client.timeout = payload.ollama_timeout_seconds
 
     if payload.alert_medium_threshold is not None:
@@ -95,7 +126,12 @@ async def update_settings(
     if payload.log_level is not None:
         settings.log_level = payload.log_level
 
-    logger.info("settings.updated", changes=payload.model_dump(exclude_none=True))
+    # Persist to database
+    db_changes = {k: str(v) for k, v in changes.items() if k in _PERSISTABLE_KEYS}
+    if db_changes:
+        await settings_repo.set_many(db_changes)
+
+    logger.info("settings.updated", changes=changes)
 
     return SystemSettings(
         ollama_base_url=settings.ollama_base_url,

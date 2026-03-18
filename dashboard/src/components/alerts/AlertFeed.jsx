@@ -56,7 +56,7 @@ export default function AlertFeed({ onSelectAlert, wsAlerts = [] }) {
 
   const handleAcknowledge = async (alertId) => {
     try {
-      await api.acknowledgeAlert(alertId)
+      await api.acknowledgeAlert(alertId, { acknowledged_by: 'admin' })
       setAlerts((prev) =>
         prev.map((a) => (a.id === alertId ? { ...a, acknowledged: true } : a))
       )

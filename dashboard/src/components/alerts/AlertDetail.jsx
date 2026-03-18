@@ -38,7 +38,7 @@ export default function AlertDetail({ alertId, onClose, onAcknowledged }) {
     if (!detail || detail.acknowledged) return
     setAcknowledging(true)
     try {
-      await api.acknowledgeAlert(detail.id)
+      await api.acknowledgeAlert(detail.id, { acknowledged_by: 'admin' })
       setDetail((prev) => ({ ...prev, acknowledged: true }))
       onAcknowledged?.(detail.id)
     } catch (err) {

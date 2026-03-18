@@ -5,6 +5,7 @@ Developed by Pradyumn Tandon (https://pradyumntandon.com) at VRIP7 (https://vrip
 Async HTTP client for communicating with the Ollama LLM inference server.
 """
 
+import asyncio
 import httpx
 import structlog
 
@@ -68,7 +69,11 @@ class OllamaClient:
             logger.error("ollama.timeout", model=self.model, timeout=self.timeout)
             raise OllamaClientError(f"Ollama request timed out after {self.timeout}s")
         except httpx.HTTPStatusError as e:
-            logger.error("ollama.http_error", status_code=e.response.status_code, detail=str(e))
+            if e.response.status_code == 404:
+                logger.error("ollama.model_not_found", model=self.model,
+                             detail="Model not loaded in Ollama. Run 'ollama pull' first.")
+            else:
+                logger.error("ollama.http_error", status_code=e.response.status_code, detail=str(e))
             raise OllamaClientError(f"Ollama HTTP error: {e.response.status_code}")
         except httpx.RequestError as e:
             logger.error("ollama.connection_error", error=str(e))
@@ -106,32 +111,75 @@ class OllamaClient:
             return False
 
     async def ensure_model(self) -> None:
-        """Pull the configured model if it is not already available."""
-        try:
-            response = await self._client.get("/api/tags")
-            response.raise_for_status()
-            tags_data = response.json()
-            models = [m.get("name", "") for m in tags_data.get("models", [])]
-            if any(self.model in m for m in models):
-                logger.info("ollama.model_ready", model=self.model)
-                return
-
-            logger.info("ollama.model_pulling", model=self.model)
-            pull_client = httpx.AsyncClient(
-                base_url=self.base_url,
-                timeout=httpx.Timeout(timeout=600.0, connect=10.0),
-            )
+        """Pull the configured model if it is not already available. Retries with backoff."""
+        max_retries = 3
+        for attempt in range(1, max_retries + 1):
             try:
-                pull_response = await pull_client.post(
-                    "/api/pull",
-                    json={"name": self.model, "stream": False},
+                response = await self._client.get("/api/tags")
+                response.raise_for_status()
+                tags_data = response.json()
+                models = [m.get("name", "") for m in tags_data.get("models", [])]
+                if any(self.model in m for m in models):
+                    logger.info("ollama.model_ready", model=self.model)
+                    return
+
+                logger.info("ollama.model_pulling", model=self.model, attempt=attempt)
+                pull_client = httpx.AsyncClient(
+                    base_url=self.base_url,
+                    timeout=httpx.Timeout(timeout=600.0, connect=30.0),
                 )
-                pull_response.raise_for_status()
-                logger.info("ollama.model_pulled", model=self.model)
-            finally:
-                await pull_client.aclose()
+                try:
+                    pull_response = await pull_client.post(
+                        "/api/pull",
+                        json={"name": self.model, "stream": False},
+                    )
+                    pull_response.raise_for_status()
+                    logger.info("ollama.model_pulled", model=self.model)
+                    return
+                finally:
+                    await pull_client.aclose()
+            except Exception as e:
+                logger.error(
+                    "ollama.model_pull_failed",
+                    model=self.model,
+                    attempt=attempt,
+                    max_retries=max_retries,
+                    error=str(e),
+                )
+                if attempt < max_retries:
+                    wait = 5 * attempt
+                    logger.info("ollama.model_pull_retry", wait_seconds=wait)
+                    await asyncio.sleep(wait)
+
+        logger.warning(
+            "ollama.model_unavailable",
+            model=self.model,
+            message="Model could not be pulled. LLM analysis will fall back to rule-based pre-filter.",
+        )
+
+    async def warmup(self) -> None:
+        """Send a minimal generate request to load the model into VRAM."""
+        logger.info("ollama.warmup_start", model=self.model)
+        warmup_client = httpx.AsyncClient(
+            base_url=self.base_url,
+            timeout=httpx.Timeout(timeout=300.0, connect=10.0),
+        )
+        try:
+            response = await warmup_client.post(
+                "/api/generate",
+                json={
+                    "model": self.model,
+                    "prompt": "Hello",
+                    "stream": False,
+                    "options": {"num_predict": 1},
+                },
+            )
+            response.raise_for_status()
+            logger.info("ollama.warmup_complete", model=self.model)
         except Exception as e:
-            logger.error("ollama.model_pull_failed", model=self.model, error=str(e))
+            logger.error("ollama.warmup_failed", model=self.model, error=str(e))
+        finally:
+            await warmup_client.aclose()
 
     async def close(self):
         """Close the HTTP client."""

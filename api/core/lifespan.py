@@ -17,6 +17,7 @@ from ..db.repositories.analysis_repo import AnalysisRepository
 from ..db.repositories.alert_repo import AlertRepository
 from ..db.repositories.baseline_repo import BaselineRepository
 from ..db.repositories.employee_repo import EmployeeRepository
+from ..db.repositories.settings_repo import SettingsRepository
 from ..websocket.manager import WebSocketManager
 
 logger = structlog.get_logger(__name__)
@@ -48,6 +49,29 @@ async def lifespan(app: FastAPI):
     alert_repo = AlertRepository(session_factory)
     baseline_repo = BaselineRepository(session_factory)
     employee_repo = EmployeeRepository(session_factory)
+    settings_repo = SettingsRepository(session_factory)
+
+    # Load persisted settings from database (overrides env defaults)
+    persisted = await settings_repo.get_all()
+    _SETTINGS_TYPE_MAP = {
+        "ollama_timeout_seconds": int,
+        "alert_medium_threshold": float,
+        "alert_high_threshold": float,
+        "alert_critical_threshold": float,
+        "prefilter_score_boost": float,
+        "behavioral_weight": float,
+        "llm_weight": float,
+        "log_level": str,
+    }
+    for key, value in persisted.items():
+        if hasattr(settings, key):
+            cast = _SETTINGS_TYPE_MAP.get(key, str)
+            try:
+                setattr(settings, key, cast(value))
+            except (ValueError, TypeError):
+                pass
+    if persisted:
+        logger.info("settings.loaded_from_db", keys=list(persisted.keys()))
 
     # Initialize analysis pipeline
     pipeline = AnalysisPipeline(
@@ -68,10 +92,14 @@ async def lifespan(app: FastAPI):
     app.state.alert_repo = alert_repo
     app.state.baseline_repo = baseline_repo
     app.state.employee_repo = employee_repo
+    app.state.settings_repo = settings_repo
     app.state.settings = settings
 
     # Ensure LLM model is available (auto-pull if missing)
     await llm_client.ensure_model()
+
+    # Warm up the model (loads into VRAM so first request is fast)
+    await llm_client.warmup()
 
     logger.info("mindwall.ready", ollama_url=settings.ollama_base_url, model=settings.ollama_model)
 
