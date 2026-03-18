@@ -33,11 +33,17 @@ async def get_employees(
 ) -> EmployeePaginatedResponse:
     """Get paginated employee list with rolling risk scores."""
     employee_repo = request.app.state.employee_repo
+    analysis_repo = request.app.state.analysis_repo
 
     result = await employee_repo.get_all(
         limit=limit,
         offset=offset,
         sort_by_risk=sort_by_risk,
+    )
+
+    # Batch-load per-employee counts
+    email_counts = await analysis_repo.get_email_counts_by_recipients(
+        [emp.email for emp in result["items"]]
     )
 
     items = [
@@ -47,6 +53,8 @@ async def get_employees(
             display_name=emp.display_name,
             department=emp.department,
             risk_score=emp.risk_score,
+            total_emails=email_counts.get(emp.email, {}).get("total", 0),
+            flagged_emails=email_counts.get(emp.email, {}).get("flagged", 0),
             created_at=emp.created_at,
             updated_at=emp.updated_at,
         )
@@ -103,8 +111,11 @@ async def get_employee_risk_profile(
 
     employee = profile["employee"]
 
-    # Serialize recent analyses
+    # Serialize recent analyses and compute avg dimension scores
     recent_analyses_data = []
+    dim_totals = {}
+    dim_counts = {}
+    flagged_count = 0
     for analysis in profile.get("recent_analyses", []):
         dim_scores = {}
         if analysis.dimension_scores:
@@ -112,6 +123,14 @@ async def get_employee_risk_profile(
                 dim_scores = json.loads(analysis.dimension_scores)
             except json.JSONDecodeError:
                 dim_scores = {}
+
+        for k, v in dim_scores.items():
+            if isinstance(v, (int, float)):
+                dim_totals[k] = dim_totals.get(k, 0.0) + float(v)
+                dim_counts[k] = dim_counts.get(k, 0) + 1
+
+        if analysis.manipulation_score and analysis.manipulation_score >= 35:
+            flagged_count += 1
 
         recent_analyses_data.append({
             "id": analysis.id,
@@ -126,6 +145,11 @@ async def get_employee_risk_profile(
             "dimension_scores": dim_scores,
         })
 
+    avg_dim_scores = {
+        k: round(dim_totals[k] / dim_counts[k], 2)
+        for k in dim_totals if dim_counts.get(k, 0) > 0
+    }
+
     top_senders = [
         ThreatSenderInfo(**s) for s in profile.get("top_threat_senders", [])
     ]
@@ -135,7 +159,10 @@ async def get_employee_risk_profile(
         display_name=employee.display_name,
         department=employee.department,
         rolling_risk_score=profile["rolling_risk_score"],
+        total_emails=profile["total_analyses"],
+        flagged_emails=flagged_count,
         total_analyses=profile["total_analyses"],
+        avg_dimension_scores=avg_dim_scores,
         top_threat_senders=top_senders,
         recent_analyses=recent_analyses_data,
     )

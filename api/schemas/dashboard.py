@@ -11,6 +11,13 @@ from typing import Dict, List, Optional
 from pydantic import BaseModel
 
 
+class HeatmapData(BaseModel):
+    """Risk heatmap grid data."""
+    data: List[List[Optional[float]]]
+    row_labels: List[str]
+    col_labels: List[str]
+
+
 class DashboardSummary(BaseModel):
     """Organization-wide threat summary statistics."""
     total_analyses: int
@@ -19,18 +26,16 @@ class DashboardSummary(BaseModel):
     critical_count: int
     average_processing_ms: float
     unacknowledged_alerts: Dict[str, int]
+    employee_count: int
+    avg_dimension_scores: Dict[str, float]
+    heatmap_data: HeatmapData
 
 
 class TimelineEntry(BaseModel):
-    """Single entry in the threat timeline."""
-    analysis_id: int
-    analyzed_at: datetime
-    manipulation_score: float
-    severity: str
-    sender_email: str
-    recipient_email: str
-    subject: Optional[str] = None
-    channel: str
+    """Aggregated time-bucket entry for the threat timeline."""
+    bucket: datetime
+    avg_score: float
+    count: int
 
 
 class TimelineResponse(BaseModel):

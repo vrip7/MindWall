@@ -27,9 +27,9 @@ client.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 
-// Response interceptor for error handling
+// Response interceptor — extract data and handle errors
 client.interceptors.response.use(
-  (response) => response,
+  (response) => response.data,
   (error) => {
     if (error.response?.status === 401 || error.response?.status === 403) {
       console.error('MindWall API: Authentication failed')
@@ -42,7 +42,7 @@ client.interceptors.response.use(
 export const api = {
   // Dashboard
   getDashboardSummary: () => client.get('/api/dashboard/summary'),
-  getTimeline: (params) => client.get('/api/dashboard/timeline', { params }),
+  getDashboardTimeline: (params) => client.get('/api/dashboard/timeline', { params }),
 
   // Alerts
   getAlerts: (params) => client.get('/api/alerts', { params }),
@@ -62,4 +62,4 @@ export const api = {
   checkHealth: () => client.get('/health'),
 }
 
-export default client
+export default api

@@ -6,7 +6,7 @@ FROM python:3.12-slim AS base
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-WORKDIR /app
+WORKDIR /srv
 
 # Install system dependencies
 RUN apt-get update && \
@@ -17,11 +17,11 @@ RUN apt-get update && \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY . .
+# Copy application code into a proper package directory
+COPY . ./app/
 
 # Create data directories
-RUN mkdir -p /app/data/db
+RUN mkdir -p /srv/app/data/db
 
 # Expose port
 EXPOSE 8000
@@ -30,5 +30,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=15s --timeout=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Run with uvicorn
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--log-level", "info"]
+# Run as package so relative imports work
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--log-level", "info"]

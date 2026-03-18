@@ -56,7 +56,7 @@ export default function AlertCard({ alert, onClick, onAcknowledge }) {
                 {alert.severity}
               </span>
               <span className="text-white font-medium text-sm truncate">
-                {alert.headline || `Score: ${alert.aggregate_score?.toFixed(1)}`}
+                {alert.headline || `Score: ${alert.manipulation_score?.toFixed(1)}`}
               </span>
             </div>
             <div className="flex items-center gap-3 text-xs text-gray-500">

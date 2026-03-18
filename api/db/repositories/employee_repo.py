@@ -39,6 +39,12 @@ class EmployeeRepository:
 
             return employee
 
+    async def get_count(self) -> int:
+        """Return the total number of monitored employees."""
+        async with self.session_factory() as session:
+            result = await session.execute(select(func.count(Employee.id)))
+            return result.scalar() or 0
+
     async def get_all(
         self,
         limit: int = 100,

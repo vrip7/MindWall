@@ -25,7 +25,8 @@ export default function AlertFeed({ onSelectAlert, wsAlerts = [] }) {
   const fetchAlerts = useCallback(async () => {
     setLoading(true)
     try {
-      const params = { page, page_size: pageSize }
+      const offset = (page - 1) * pageSize
+      const params = { limit: pageSize, offset }
       if (severity !== 'all') params.severity = severity
       if (!showAcknowledged) params.acknowledged = false
       const res = await api.getAlerts(params)

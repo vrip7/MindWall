@@ -6,11 +6,23 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { Shield, Mail, AlertTriangle, Users } from 'lucide-react'
+import { subDays, subHours } from 'date-fns'
 import ThreatGauge from '../components/dashboard/ThreatGauge'
 import DimensionRadar from '../components/dashboard/DimensionRadar'
 import ThreatTimeline from '../components/dashboard/ThreatTimeline'
 import RiskHeatmap from '../components/dashboard/RiskHeatmap'
 import api from '../api/client'
+
+function rangeToParams(range) {
+  const now = new Date()
+  let start
+  switch (range) {
+    case '24h': start = subHours(now, 24); break
+    case '30d': start = subDays(now, 30); break
+    default:    start = subDays(now, 7); break
+  }
+  return { start_date: start.toISOString(), end_date: now.toISOString() }
+}
 
 export default function Dashboard() {
   const [summary, setSummary] = useState(null)
@@ -21,7 +33,7 @@ export default function Dashboard() {
     try {
       const [summaryRes, timelineRes] = await Promise.all([
         api.getDashboardSummary(),
-        api.getDashboardTimeline({ range: '7d' }),
+        api.getDashboardTimeline(rangeToParams('7d')),
       ])
       setSummary(summaryRes)
       setTimeline(timelineRes.entries || [])
@@ -40,12 +52,16 @@ export default function Dashboard() {
 
   const handleRangeChange = async (range) => {
     try {
-      const res = await api.getDashboardTimeline({ range })
+      const res = await api.getDashboardTimeline(rangeToParams(range))
       setTimeline(res.entries || [])
     } catch (err) {
       console.error('Timeline fetch error:', err)
     }
   }
+
+  const activeAlertCount = summary?.unacknowledged_alerts
+    ? Object.values(summary.unacknowledged_alerts).reduce((a, b) => a + b, 0)
+    : 0
 
   if (loading) {
     return (
@@ -67,13 +83,13 @@ export default function Dashboard() {
         <StatCard
           icon={Mail}
           label="Emails Analyzed"
-          value={summary?.total_emails ?? 0}
+          value={summary?.total_analyses ?? 0}
           color="text-mindwall-400"
         />
         <StatCard
           icon={AlertTriangle}
           label="Active Alerts"
-          value={summary?.active_alerts ?? 0}
+          value={activeAlertCount}
           color="text-red-400"
         />
         <StatCard
@@ -85,7 +101,7 @@ export default function Dashboard() {
         <StatCard
           icon={Shield}
           label="Avg Threat Score"
-          value={(summary?.average_threat_score ?? 0).toFixed(1)}
+          value={(summary?.average_score ?? 0).toFixed(1)}
           color="text-amber-400"
         />
       </div>
@@ -93,7 +109,7 @@ export default function Dashboard() {
       {/* Main grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-1">
-          <ThreatGauge score={summary?.average_threat_score ?? 0} />
+          <ThreatGauge score={summary?.average_score ?? 0} />
         </div>
         <div className="lg:col-span-2">
           <ThreatTimeline

@@ -16,17 +16,17 @@ import {
 } from 'recharts'
 
 const DIMENSION_LABELS = {
-  urgency: 'Urgency',
+  artificial_urgency: 'Urgency',
   authority_impersonation: 'Authority',
-  fear_inducement: 'Fear',
+  fear_threat_induction: 'Fear',
   reciprocity_exploitation: 'Reciprocity',
-  scarcity: 'Scarcity',
-  social_proof: 'Social Proof',
-  behavioral_deviation: 'Behavioral',
-  cross_channel_inconsistency: 'Cross-Channel',
+  scarcity_tactics: 'Scarcity',
+  social_proof_manipulation: 'Social Proof',
+  sender_behavioral_deviation: 'Behavioral',
+  cross_channel_coordination: 'Cross-Channel',
   emotional_escalation: 'Emotional',
-  context_mismatch: 'Context',
-  unusual_action_request: 'Unusual Action',
+  request_context_mismatch: 'Context',
+  unusual_action_requested: 'Unusual Action',
   timing_anomaly: 'Timing',
 }
 

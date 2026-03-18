@@ -4,29 +4,25 @@
  * Developed by Pradyumn Tandon (https://pradyumntandon.com) at VRIP7 (https://vrip7.com)
  */
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import AlertFeed from '../components/alerts/AlertFeed'
 import AlertDetail from '../components/alerts/AlertDetail'
-import { WebSocketManager } from '../api/websocket'
+import { wsManager } from '../api/websocket'
 
 export default function Alerts() {
   const [selectedAlertId, setSelectedAlertId] = useState(null)
   const [wsAlerts, setWsAlerts] = useState([])
-  const wsRef = useRef(null)
 
   useEffect(() => {
-    const ws = new WebSocketManager()
-    wsRef.current = ws
-
-    ws.on('new_alert', (data) => {
+    const unsubscribe = wsManager.on('new_alert', (data) => {
       setWsAlerts((prev) => [data, ...prev])
     })
 
-    ws.connect()
+    wsManager.connect()
 
     return () => {
-      ws.disconnect()
+      unsubscribe()
     }
   }, [])
 

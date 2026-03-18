@@ -10,21 +10,21 @@ import api from '../api/client'
 
 const THRESHOLD_FIELDS = [
   {
-    key: 'alert_threshold_critical',
+    key: 'alert_critical_threshold',
     label: 'Critical Alert Threshold',
     description: 'Score at or above which an alert is classified as critical',
     min: 0,
     max: 100,
   },
   {
-    key: 'alert_threshold_high',
+    key: 'alert_high_threshold',
     label: 'High Alert Threshold',
     description: 'Score at or above which an alert is classified as high severity',
     min: 0,
     max: 100,
   },
   {
-    key: 'alert_threshold_medium',
+    key: 'alert_medium_threshold',
     label: 'Medium Alert Threshold',
     description: 'Score at or above which an alert is classified as medium severity',
     min: 0,

@@ -18,7 +18,7 @@ export default function Employees() {
 
   const fetchEmployees = useCallback(async () => {
     try {
-      const res = await api.getEmployees({ page: 1, page_size: 200 })
+      const res = await api.getEmployees({ limit: 200, offset: 0 })
       setEmployees(res.items || [])
     } catch (err) {
       console.error('Failed to fetch employees:', err)

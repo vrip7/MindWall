@@ -24,6 +24,9 @@ class SystemSettings(BaseModel):
     alert_medium_threshold: float
     alert_high_threshold: float
     alert_critical_threshold: float
+    prefilter_score_boost: float
+    behavioral_weight: float
+    llm_weight: float
     log_level: str
     workers: int
 
@@ -34,6 +37,9 @@ class SettingsUpdateRequest(BaseModel):
     alert_medium_threshold: Optional[float] = Field(None, ge=0, le=100)
     alert_high_threshold: Optional[float] = Field(None, ge=0, le=100)
     alert_critical_threshold: Optional[float] = Field(None, ge=0, le=100)
+    prefilter_score_boost: Optional[float] = Field(None, ge=0, le=50)
+    behavioral_weight: Optional[float] = Field(None, ge=0, le=1)
+    llm_weight: Optional[float] = Field(None, ge=0, le=1)
     log_level: Optional[str] = Field(None, pattern="^(DEBUG|INFO|WARNING|ERROR)$")
 
 
@@ -49,6 +55,9 @@ async def get_settings(request: Request) -> SystemSettings:
         alert_medium_threshold=settings.alert_medium_threshold,
         alert_high_threshold=settings.alert_high_threshold,
         alert_critical_threshold=settings.alert_critical_threshold,
+        prefilter_score_boost=settings.prefilter_score_boost,
+        behavioral_weight=settings.behavioral_weight,
+        llm_weight=settings.llm_weight,
         log_level=settings.log_level,
         workers=settings.workers,
     )
@@ -77,6 +86,12 @@ async def update_settings(
         settings.alert_high_threshold = payload.alert_high_threshold
     if payload.alert_critical_threshold is not None:
         settings.alert_critical_threshold = payload.alert_critical_threshold
+    if payload.prefilter_score_boost is not None:
+        settings.prefilter_score_boost = payload.prefilter_score_boost
+    if payload.behavioral_weight is not None:
+        settings.behavioral_weight = payload.behavioral_weight
+    if payload.llm_weight is not None:
+        settings.llm_weight = payload.llm_weight
     if payload.log_level is not None:
         settings.log_level = payload.log_level
 
@@ -89,6 +104,9 @@ async def update_settings(
         alert_medium_threshold=settings.alert_medium_threshold,
         alert_high_threshold=settings.alert_high_threshold,
         alert_critical_threshold=settings.alert_critical_threshold,
+        prefilter_score_boost=settings.prefilter_score_boost,
+        behavioral_weight=settings.behavioral_weight,
+        llm_weight=settings.llm_weight,
         log_level=settings.log_level,
         workers=settings.workers,
     )

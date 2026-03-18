@@ -84,7 +84,7 @@ export default function AlertDetail({ alertId, onClose, onAcknowledged }) {
                 {detail.severity?.toUpperCase()}
               </span>
               <span className="text-2xl font-bold text-white">
-                {detail.aggregate_score?.toFixed(1)}
+                {detail.manipulation_score?.toFixed(1)}
               </span>
               <span className="text-gray-500 text-sm">/100</span>
 

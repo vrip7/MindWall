@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     alert_high_threshold: float = 60.0
     alert_critical_threshold: float = 80.0
 
+    # Pipeline Weights
+    prefilter_score_boost: float = 15.0
+    behavioral_weight: float = 0.6
+    llm_weight: float = 0.4
+
 
 @lru_cache()
 def get_settings() -> Settings:

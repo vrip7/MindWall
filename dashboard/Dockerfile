@@ -14,7 +14,20 @@ RUN npm ci --production=false
 COPY . .
 RUN npm run build
 
-# ── Stage 2: Serve with nginx ────────────────────────────────────────────────
+# ── Stage 2: Dev (used by docker-compose.override.yml) ──────────────────────
+FROM node:20-alpine AS dev
+
+WORKDIR /app
+
+COPY package.json package-lock.json* ./
+RUN npm ci --production=false
+
+COPY . .
+
+EXPOSE 3000
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+
+# ── Stage 3: Serve with nginx ────────────────────────────────────────────────
 FROM nginx:alpine
 
 # Copy built assets

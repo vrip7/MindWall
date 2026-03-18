@@ -18,6 +18,8 @@ class EmployeeSummary(BaseModel):
     display_name: Optional[str] = None
     department: Optional[str] = None
     risk_score: float
+    total_emails: int = 0
+    flagged_emails: int = 0
     created_at: datetime
     updated_at: datetime
 
@@ -50,6 +52,10 @@ class EmployeeRiskProfile(BaseModel):
     display_name: Optional[str] = None
     department: Optional[str] = None
     rolling_risk_score: float
+    total_emails: int = 0
+    flagged_emails: int = 0
     total_analyses: int
+    avg_dimension_scores: Dict[str, float] = {}
     top_threat_senders: List[ThreatSenderInfo]
     recent_analyses: List[Dict[str, Any]]
+    recent_alerts: List[Dict[str, Any]] = []
