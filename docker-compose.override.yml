@@ -16,7 +16,7 @@ services:
     command: >
       uvicorn app.main:app
       --host 0.0.0.0
-      --port 8000
+      --port 5297
       --reload
       --reload-dir /srv/app
       --log-level debug
@@ -31,13 +31,12 @@ services:
     build:
       context: ./dashboard
       dockerfile: Dockerfile
-      target: dev                   # Use dev stage with node/npm for HMR
     volumes:
       - ./dashboard:/app
       - /app/node_modules           # Anonymous volume for node_modules
     ports:
-      - "3000:3000"                 # Vite dev server port
+      - "4297:4297"                 # Vite dev server port
     environment:
-      - VITE_API_BASE_URL=http://localhost:8000
-      - VITE_WS_URL=ws://localhost:8000/ws/alerts
+      - VITE_API_BASE_URL=http://localhost:5297
+      - VITE_WS_URL=ws://localhost:5297/ws/alerts
     command: ["sh", "-c", "npm install && npm run dev -- --host 0.0.0.0"]

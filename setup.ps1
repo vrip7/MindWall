@@ -160,8 +160,8 @@ Write-Step "Verifying service health..."
 Start-Sleep -Seconds 5
 
 $services = @(
-    @{ Name = "API";       URL = "http://localhost:8000/health";       Container = "mindwall-api" },
-    @{ Name = "Dashboard"; URL = "http://localhost:3000";              Container = "mindwall-ui" },
+    @{ Name = "API";       URL = "http://localhost:5297/health";       Container = "mindwall-api" },
+    @{ Name = "Dashboard"; URL = "http://localhost:4297";              Container = "mindwall-ui" },
     @{ Name = "Ollama";    URL = "http://localhost:11434/api/tags";    Container = "mindwall-ollama" }
 )
 
@@ -182,9 +182,9 @@ Write-Host ""
 Write-Host "  ╔══════════════════════════════════════════════════════════╗" -ForegroundColor Green
 Write-Host "  ║          ✅ MindWall is running                        ║" -ForegroundColor Green
 Write-Host "  ║                                                        ║" -ForegroundColor Green
-Write-Host "  ║  Dashboard:    http://localhost:3000                   ║" -ForegroundColor Green
-Write-Host "  ║  API:          http://localhost:8000                   ║" -ForegroundColor Green
-Write-Host "  ║  API Health:   http://localhost:8000/health            ║" -ForegroundColor Green
+Write-Host "  ║  Dashboard:    http://localhost:4297                   ║" -ForegroundColor Green
+Write-Host "  ║  API:          http://localhost:5297                   ║" -ForegroundColor Green
+Write-Host "  ║  API Health:   http://localhost:5297/health            ║" -ForegroundColor Green
 Write-Host "  ║  IMAP Proxy:   localhost:1143                         ║" -ForegroundColor Green
 Write-Host "  ║  SMTP Proxy:   localhost:1025                         ║" -ForegroundColor Green
 Write-Host "  ║                                                        ║" -ForegroundColor Green

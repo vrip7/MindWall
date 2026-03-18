@@ -31,8 +31,8 @@ docker compose exec ollama ollama pull qwen3:8b
 
 echo ""
 echo "✅ MindWall is running."
-echo "   Dashboard:      http://localhost:3000"
-echo "   API:            http://localhost:8000"
+echo "   Dashboard:      http://localhost:4297"
+echo "   API:            http://localhost:5297"
 echo "   IMAP Proxy:     localhost:1143"
 echo ""
 echo "   Point your email client's IMAP server to: localhost:1143"

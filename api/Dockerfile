@@ -24,11 +24,11 @@ COPY . ./app/
 RUN mkdir -p /srv/app/data/db
 
 # Expose port
-EXPOSE 8000
+EXPOSE 5297
 
 # Healthcheck
 HEALTHCHECK --interval=15s --timeout=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD curl -f http://localhost:5297/health || exit 1
 
 # Run as package so relative imports work
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--log-level", "info"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "5297", "--workers", "4", "--log-level", "info"]

@@ -14,7 +14,7 @@ from aiosmtpd.controller import Controller
 from aiosmtpd.smtp import SMTP, Envelope, Session
 
 from .upstream import SMTPUpstream
-from ..config import ProxyConfig
+from config import ProxyConfig
 
 logger = structlog.get_logger(__name__)
 

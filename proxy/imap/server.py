@@ -14,7 +14,7 @@ import structlog
 from .upstream import UpstreamIMAPConnection
 from .interceptor import FetchInterceptor
 from .injector import RiskScoreInjector
-from ..config import ProxyConfig
+from config import ProxyConfig
 
 logger = structlog.get_logger(__name__)
 

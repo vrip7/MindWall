@@ -34,7 +34,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[
-            "http://localhost:3000",
+            "http://localhost:4297",
             "chrome-extension://*",
             "moz-extension://*",
         ],

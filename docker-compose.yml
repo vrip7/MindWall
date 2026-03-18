@@ -51,12 +51,12 @@ services:
       - LOG_LEVEL=INFO
       - WORKERS=4
     ports:
-      - "8000:8000"
+      - "5297:5297"
     networks:
       - mindwall-internal
       - mindwall-host
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:5297/health"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -72,7 +72,7 @@ services:
       api:
         condition: service_healthy
     environment:
-      - API_BASE_URL=http://api:8000
+      - API_BASE_URL=http://api:5297
       - API_SECRET_KEY=${API_SECRET_KEY}
       - IMAP_LISTEN_HOST=0.0.0.0
       - IMAP_LISTEN_PORT=1143
@@ -96,10 +96,10 @@ services:
     depends_on:
       - api
     environment:
-      - VITE_API_BASE_URL=http://localhost:8000
-      - VITE_WS_URL=ws://localhost:8000/ws/alerts
+      - VITE_API_BASE_URL=http://localhost:5297
+      - VITE_WS_URL=ws://localhost:5297/ws/alerts
     ports:
-      - "3000:80"
+      - "4297:4297"
     networks:
       - mindwall-host
 

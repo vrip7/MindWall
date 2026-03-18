@@ -3,7 +3,7 @@
  * Developed by Pradyumn Tandon (https://pradyumntandon.com) at VRIP7 (https://vrip7.com)
  */
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws/alerts'
+const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:5297/ws/alerts'
 
 class WebSocketManager {
   constructor() {

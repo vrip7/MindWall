@@ -4,7 +4,7 @@
  * Developed by Pradyumn Tandon (https://pradyumntandon.com) at VRIP7 (https://vrip7.com)
  */
 
-const API_BASE = 'http://localhost:8000'
+const API_BASE = 'http://localhost:5297'
 const API_KEY_STORAGE_KEY = 'mindwall_api_key'
 
 /**

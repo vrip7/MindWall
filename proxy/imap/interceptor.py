@@ -16,8 +16,8 @@ import structlog
 
 from .parser import IMAPParser
 from .injector import RiskScoreInjector
-from ..mime.parser import MIMEParser
-from ..mime.sanitizer import HTMLSanitizer
+from mime.parser import MIMEParser
+from mime.sanitizer import HTMLSanitizer
 
 logger = structlog.get_logger(__name__)
 

@@ -14,7 +14,7 @@ class ProxyConfig:
     """Configuration for the MindWall IMAP/SMTP proxy."""
 
     # MindWall API
-    api_base_url: str = "http://api:8000"
+    api_base_url: str = "http://api:5297"
     api_secret_key: str = ""
 
     # IMAP proxy
@@ -32,7 +32,7 @@ class ProxyConfig:
     def from_env(cls) -> "ProxyConfig":
         """Load configuration from environment variables."""
         return cls(
-            api_base_url=os.environ.get("API_BASE_URL", "http://api:8000"),
+            api_base_url=os.environ.get("API_BASE_URL", "http://api:5297"),
             api_secret_key=os.environ.get("API_SECRET_KEY", ""),
             imap_listen_host=os.environ.get("IMAP_LISTEN_HOST", "0.0.0.0"),
             imap_listen_port=int(os.environ.get("IMAP_LISTEN_PORT", "1143")),
