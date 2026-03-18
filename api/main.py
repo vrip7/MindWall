@@ -13,7 +13,7 @@ from .core.lifespan import lifespan
 from .core.logging import configure_logging
 from .middleware.auth import APIKeyAuthMiddleware
 from .middleware.request_id import RequestIDMiddleware
-from .routers import analyze, dashboard, alerts, employees, settings, websocket
+from .routers import analyze, dashboard, alerts, employees, settings, websocket, auth, email_accounts
 
 
 def create_app() -> FastAPI:
@@ -48,11 +48,13 @@ def create_app() -> FastAPI:
     app.add_middleware(APIKeyAuthMiddleware, api_secret_key=config.api_secret_key)
 
     # Register routers
+    app.include_router(auth.router, prefix="/auth", tags=["Auth"])
     app.include_router(analyze.router, prefix="/api", tags=["Analysis"])
     app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
     app.include_router(alerts.router, prefix="/api/alerts", tags=["Alerts"])
     app.include_router(employees.router, prefix="/api/employees", tags=["Employees"])
     app.include_router(settings.router, prefix="/api/settings", tags=["Settings"])
+    app.include_router(email_accounts.router, prefix="/api/email-accounts", tags=["Email Accounts"])
     app.include_router(websocket.router, tags=["WebSocket"])
 
     @app.get("/health", tags=["Health"])

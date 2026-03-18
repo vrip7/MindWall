@@ -32,7 +32,11 @@ client.interceptors.response.use(
   (response) => response.data,
   (error) => {
     if (error.response?.status === 401 || error.response?.status === 403) {
-      console.error('MindWall API: Authentication failed')
+      // Clear stale key and redirect to login
+      localStorage.removeItem('mindwall_api_key')
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login'
+      }
     }
     return Promise.reject(error)
   }
@@ -40,6 +44,9 @@ client.interceptors.response.use(
 
 // API functions
 export const api = {
+  // Auth
+  login: (data) => client.post('/auth/login', data),
+
   // Dashboard
   getDashboardSummary: () => client.get('/api/dashboard/summary'),
   getDashboardTimeline: (params) => client.get('/api/dashboard/timeline', { params }),
@@ -57,6 +64,11 @@ export const api = {
   // Settings
   getSettings: () => client.get('/api/settings'),
   updateSettings: (data) => client.put('/api/settings', data),
+
+  // Email Accounts
+  getEmailAccounts: () => client.get('/api/email-accounts'),
+  createEmailAccount: (data) => client.post('/api/email-accounts', data),
+  deleteEmailAccount: (id) => client.delete(`/api/email-accounts/${id}`),
 
   // Health
   checkHealth: () => client.get('/health'),

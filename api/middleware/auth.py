@@ -15,6 +15,7 @@ logger = structlog.get_logger(__name__)
 # Paths that do not require authentication
 PUBLIC_PATHS = {
     "/health",
+    "/auth/login",
     "/docs",
     "/openapi.json",
     "/favicon.ico",

@@ -60,3 +60,19 @@ CREATE INDEX IF NOT EXISTS idx_analyses_recipient ON analyses(recipient_email, a
 CREATE INDEX IF NOT EXISTS idx_analyses_score ON analyses(manipulation_score DESC);
 CREATE INDEX IF NOT EXISTS idx_alerts_severity ON alerts(severity, acknowledged, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_baselines_lookup ON sender_baselines(recipient_email, sender_email);
+
+CREATE TABLE IF NOT EXISTS email_accounts (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    email           TEXT NOT NULL UNIQUE,
+    display_name    TEXT,
+    imap_host       TEXT NOT NULL,
+    imap_port       INTEGER NOT NULL DEFAULT 993,
+    smtp_host       TEXT NOT NULL,
+    smtp_port       INTEGER NOT NULL DEFAULT 587,
+    username        TEXT NOT NULL,
+    password        TEXT NOT NULL,
+    use_tls         BOOLEAN DEFAULT TRUE,
+    enabled         BOOLEAN DEFAULT TRUE,
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+);

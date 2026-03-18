@@ -4,10 +4,10 @@
  */
 
 import React, { useState, useEffect } from 'react'
-import { Bell, Wifi, WifiOff, Shield } from 'lucide-react'
+import { Bell, Wifi, WifiOff, Shield, LogOut } from 'lucide-react'
 import wsManager from '../../api/websocket'
 
-export default function TopBar() {
+export default function TopBar({ onLogout }) {
   const [wsConnected, setWsConnected] = useState(false)
   const [alertCount, setAlertCount] = useState(0)
 
@@ -63,6 +63,16 @@ export default function TopBar() {
               {alertCount > 99 ? '99+' : alertCount}
             </span>
           )}
+        </button>
+
+        {/* Logout */}
+        <button
+          onClick={onLogout}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-400 hover:text-red-400 transition-colors"
+          title="Sign out"
+        >
+          <LogOut className="h-4 w-4" />
+          <span className="hidden sm:inline">Logout</span>
         </button>
       </div>
     </header>

@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     workers: int = 4
 
+    # Dashboard Login
+    dashboard_username: str = "admin"
+    dashboard_password: str = "MindWall@2026"
+
     # Ollama LLM
     ollama_base_url: str = "http://ollama:11434"
     ollama_model: str = "qwen3:8b"

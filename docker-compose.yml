@@ -48,6 +48,8 @@ services:
       - OLLAMA_MODEL=qwen3:8b
       - DATABASE_URL=sqlite+aiosqlite:////srv/app/data/db/mindwall.db
       - API_SECRET_KEY=${API_SECRET_KEY}
+      - DASHBOARD_USERNAME=${DASHBOARD_USERNAME}
+      - DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD}
       - LOG_LEVEL=INFO
       - WORKERS=4
     ports:
