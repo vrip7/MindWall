@@ -55,9 +55,18 @@ const THRESHOLD_FIELDS = [
   },
 ]
 
+const DEFAULT_SETTINGS = {
+  alert_critical_threshold: 80,
+  alert_high_threshold: 60,
+  alert_medium_threshold: 35,
+  prefilter_score_boost: 15,
+  behavioral_weight: 0.6,
+  llm_weight: 0.4,
+}
+
 export default function Settings() {
-  const [settings, setSettings] = useState({})
-  const [original, setOriginal] = useState({})
+  const [settings, setSettings] = useState({ ...DEFAULT_SETTINGS })
+  const [original, setOriginal] = useState({ ...DEFAULT_SETTINGS })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)

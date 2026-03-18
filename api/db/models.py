@@ -103,3 +103,21 @@ class Alert(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     analysis: Mapped["Analysis"] = relationship("Analysis", back_populates="alerts")
+
+
+class EmailAccount(Base):
+    __tablename__ = "email_accounts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String, unique=True, nullable=False, index=True)
+    display_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    imap_host: Mapped[str] = mapped_column(String, nullable=False)
+    imap_port: Mapped[int] = mapped_column(Integer, nullable=False, default=993)
+    smtp_host: Mapped[str] = mapped_column(String, nullable=False)
+    smtp_port: Mapped[int] = mapped_column(Integer, nullable=False, default=587)
+    username: Mapped[str] = mapped_column(String, nullable=False)
+    password: Mapped[str] = mapped_column(String, nullable=False)
+    use_tls: Mapped[bool] = mapped_column(Boolean, default=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

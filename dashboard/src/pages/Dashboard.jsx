@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { Shield, Mail, AlertTriangle, Users } from 'lucide-react'
+import { Shield, Mail, AlertTriangle, Users, Inbox } from 'lucide-react'
 import { subDays, subHours } from 'date-fns'
 import ThreatGauge from '../components/dashboard/ThreatGauge'
 import DimensionRadar from '../components/dashboard/DimensionRadar'
@@ -27,16 +27,19 @@ function rangeToParams(range) {
 export default function Dashboard() {
   const [summary, setSummary] = useState(null)
   const [timeline, setTimeline] = useState([])
+  const [emailAccountCount, setEmailAccountCount] = useState(0)
   const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
     try {
-      const [summaryRes, timelineRes] = await Promise.all([
+      const [summaryRes, timelineRes, emailRes] = await Promise.all([
         api.getDashboardSummary(),
         api.getDashboardTimeline(rangeToParams('7d')),
+        api.getEmailAccounts(),
       ])
       setSummary(summaryRes)
       setTimeline(timelineRes.entries || [])
+      setEmailAccountCount(Array.isArray(emailRes) ? emailRes.length : 0)
     } catch (err) {
       console.error('Dashboard fetch error:', err)
     } finally {
@@ -79,7 +82,7 @@ export default function Dashboard() {
       </h1>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard
           icon={Mail}
           label="Emails Analyzed"
@@ -97,6 +100,12 @@ export default function Dashboard() {
           label="Monitored Employees"
           value={summary?.employee_count ?? 0}
           color="text-purple-400"
+        />
+        <StatCard
+          icon={Inbox}
+          label="Email Accounts"
+          value={emailAccountCount}
+          color="text-cyan-400"
         />
         <StatCard
           icon={Shield}

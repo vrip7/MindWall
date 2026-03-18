@@ -105,6 +105,34 @@ class OllamaClient:
             logger.error("ollama.health_failed", error=str(e))
             return False
 
+    async def ensure_model(self) -> None:
+        """Pull the configured model if it is not already available."""
+        try:
+            response = await self._client.get("/api/tags")
+            response.raise_for_status()
+            tags_data = response.json()
+            models = [m.get("name", "") for m in tags_data.get("models", [])]
+            if any(self.model in m for m in models):
+                logger.info("ollama.model_ready", model=self.model)
+                return
+
+            logger.info("ollama.model_pulling", model=self.model)
+            pull_client = httpx.AsyncClient(
+                base_url=self.base_url,
+                timeout=httpx.Timeout(timeout=600.0, connect=10.0),
+            )
+            try:
+                pull_response = await pull_client.post(
+                    "/api/pull",
+                    json={"name": self.model, "stream": False},
+                )
+                pull_response.raise_for_status()
+                logger.info("ollama.model_pulled", model=self.model)
+            finally:
+                await pull_client.aclose()
+        except Exception as e:
+            logger.error("ollama.model_pull_failed", model=self.model, error=str(e))
+
     async def close(self):
         """Close the HTTP client."""
         await self._client.aclose()

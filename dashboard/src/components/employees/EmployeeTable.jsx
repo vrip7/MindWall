@@ -5,10 +5,10 @@
  */
 
 import React, { useState, useMemo } from 'react'
-import { Search, ArrowUpDown, User, TrendingUp, TrendingDown } from 'lucide-react'
+import { Search, ArrowUpDown, User, TrendingUp, TrendingDown, Trash2 } from 'lucide-react'
 import clsx from 'clsx'
 
-export default function EmployeeTable({ employees = [], onSelect }) {
+export default function EmployeeTable({ employees = [], onSelect, onDelete }) {
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState('risk_score')
   const [sortDir, setSortDir] = useState('desc')
@@ -81,13 +81,16 @@ export default function EmployeeTable({ employees = [], onSelect }) {
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Trend
               </th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800">
             {filtered.length === 0 && (
               <tr>
                 <td
-                  colSpan={5}
+                  colSpan={6}
                   className="px-3 py-8 text-center text-sm text-gray-500"
                 >
                   No employees found
@@ -154,6 +157,18 @@ export default function EmployeeTable({ employees = [], onSelect }) {
                   {(!emp.risk_trend || emp.risk_trend === 'stable') && (
                     <span className="text-xs text-gray-600">—</span>
                   )}
+                </td>
+                <td className="px-3 py-3">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onDelete?.(emp.id, emp.display_name || emp.email)
+                    }}
+                    className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition-colors"
+                    title="Remove employee"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </td>
               </tr>
             ))}

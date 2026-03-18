@@ -170,3 +170,16 @@ class EmployeeRepository:
             await session.commit()
             await session.refresh(employee)
             return employee
+
+    async def delete_employee(self, employee_id: int) -> bool:
+        """Delete an employee by ID. Returns True if deleted."""
+        async with self.session_factory() as session:
+            result = await session.execute(
+                select(Employee).where(Employee.id == employee_id)
+            )
+            employee = result.scalar_one_or_none()
+            if not employee:
+                return False
+            await session.delete(employee)
+            await session.commit()
+            return True

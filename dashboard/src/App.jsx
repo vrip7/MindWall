@@ -5,6 +5,8 @@
 
 import React, { useState, useCallback } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+
+const routerFuture = { v7_startTransition: true, v7_relativeSplatPath: true }
 import Layout from './components/layout/Layout'
 import Dashboard from './pages/Dashboard'
 import Alerts from './pages/Alerts'
@@ -25,7 +27,7 @@ export default function App() {
 
   if (!authenticated) {
     return (
-      <Router>
+      <Router future={routerFuture}>
         <Routes>
           <Route path="/login" element={<Login onLogin={handleLogin} />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
@@ -35,7 +37,7 @@ export default function App() {
   }
 
   return (
-    <Router>
+    <Router future={routerFuture}>
       <Layout onLogout={handleLogout}>
         <Routes>
           <Route path="/" element={<Dashboard />} />

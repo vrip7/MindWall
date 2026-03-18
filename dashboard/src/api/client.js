@@ -59,6 +59,7 @@ export const api = {
   // Employees
   getEmployees: (params) => client.get('/api/employees', { params }),
   createEmployee: (data) => client.post('/api/employees', data),
+  deleteEmployee: (id) => client.delete(`/api/employees/${id}`),
   getEmployeeRiskProfile: (email) => client.get(`/api/employees/${encodeURIComponent(email)}/risk-profile`),
 
   // Settings

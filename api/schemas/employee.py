@@ -20,15 +20,40 @@ class EmployeeSummary(BaseModel):
     risk_score: float
     total_emails: int = 0
     flagged_emails: int = 0
+    email_account_configured: bool = False
     created_at: datetime
     updated_at: datetime
 
 
 class EmployeeCreateRequest(BaseModel):
-    """Request to create a new employee."""
+    """Request to create a new employee with optional email account configuration."""
     email: str = Field(..., description="Employee email address")
     display_name: Optional[str] = Field(None, description="Employee display name")
     department: Optional[str] = Field(None, description="Department name")
+    # Email account configuration (created when imap_host is provided)
+    imap_host: Optional[str] = Field(None, description="IMAP server hostname (e.g. imap.gmail.com)")
+    imap_port: int = Field(993, ge=1, le=65535)
+    smtp_host: Optional[str] = Field(None, description="SMTP server hostname (e.g. smtp.gmail.com)")
+    smtp_port: int = Field(587, ge=1, le=65535)
+    username: Optional[str] = Field(None, description="Email login username")
+    password: Optional[str] = Field(None, description="Email password or app password")
+    use_tls: bool = Field(True, description="Use TLS for connections")
+
+
+class ProxyConnectionInfo(BaseModel):
+    """Proxy connection settings to configure in the email client."""
+    imap_proxy_host: str
+    imap_proxy_port: int
+    smtp_proxy_host: str
+    smtp_proxy_port: int
+    username: str
+
+
+class EmployeeCreateResponse(BaseModel):
+    """Response after creating an employee."""
+    employee: EmployeeSummary
+    email_account_configured: bool = False
+    proxy_connection: Optional[ProxyConnectionInfo] = None
 
 
 class EmployeePaginatedResponse(BaseModel):

@@ -1,1017 +1,1126 @@
-# MindWall — Production Architecture Specification
+# MindWall — Complete Technical Documentation
 **Version:** 1.0.0  
-**Classification:** Internal Engineering Document  
+**Author:** Pradyumn Tandon ([pradyumntandon.com](https://pradyumntandon.com)) at VRIP7 ([vrip7.com](https://vrip7.com) / [github.com/vrip7](https://github.com/vrip7))  
+**Classification:** Production Engineering Reference  
 **Project:** MindWall — Cognitive Firewall / AI-Powered Human Manipulation Detection  
+
+---
+
+## Table of Contents
+
+1. [System Overview](#1-system-overview)
+2. [High-Level Architecture](#2-high-level-architecture)
+3. [Service Topology](#3-service-topology)
+4. [Authentication & Authorization](#4-authentication--authorization)
+5. [Analysis Pipeline](#5-analysis-pipeline)
+6. [12 Manipulation Dimensions](#6-12-manipulation-dimensions)
+7. [Rule-Based Pre-Filter](#7-rule-based-pre-filter)
+8. [Behavioral Baseline Engine](#8-behavioral-baseline-engine)
+9. [Score Aggregation](#9-score-aggregation)
+10. [IMAP/SMTP Proxy](#10-imapsmtp-proxy)
+11. [Email Account Management](#11-email-account-management)
+12. [Database Schema](#12-database-schema)
+13. [Dashboard UI](#13-dashboard-ui)
+14. [Browser Extension](#14-browser-extension)
+15. [Fine-Tuning Pipeline](#15-fine-tuning-pipeline)
+16. [API Reference](#16-api-reference)
+17. [Docker Deployment](#17-docker-deployment)
+18. [Security Model](#18-security-model)
+19. [Repository Structure](#19-repository-structure)
+20. [Environment Configuration](#20-environment-configuration)
 
 ---
 
 ## 1. System Overview
 
-MindWall is a fully self-hosted, privacy-first cybersecurity platform that intercepts, analyzes, and scores incoming communications (email, browser-based webmail) for psychological manipulation tactics using a locally-run, fine-tuned large language model. Zero data leaves the deployment boundary. All inference runs on-premises on a 24GB VRAM GPU server.
+MindWall is a fully self-hosted, privacy-first cybersecurity platform that intercepts, analyzes, and scores incoming and outgoing email communications for psychological manipulation tactics. It uses a locally-run Qwen3-8B large language model via Ollama — **zero data leaves the deployment boundary**. All inference runs on-premises.
+
+The system deploys as four Docker containers: an Ollama GPU inference server, a FastAPI analysis engine, a transparent IMAP/SMTP proxy, and a React admin dashboard — all orchestrated via Docker Compose.
+
+```mermaid
+graph TB
+    subgraph "Organization Network Boundary"
+        EC[Email Clients<br/>Thunderbird / Outlook / Apple Mail] -->|IMAP:1143 / SMTP:1025| PROXY
+        GMAIL[Gmail Web Browser] -->|Content Script| EXT[Browser Extension]
+        EXT -->|HTTP POST :5297| API
+
+        subgraph "Docker Compose Stack"
+            PROXY[MindWall Proxy<br/>IMAP + SMTP Interceptor]
+            API[MindWall API<br/>FastAPI :5297]
+            OLLAMA[Ollama Server<br/>Qwen3-8B GPU]
+            UI[Dashboard<br/>React :4297]
+        end
+
+        PROXY -->|HTTP POST /api/analyze| API
+        API -->|LLM Inference| OLLAMA
+        API -->|WebSocket Push| UI
+        UI -->|REST + WS| API
+    end
+
+    PROXY -->|TLS| UPSTREAM[Upstream Mail Servers<br/>imap.gmail.com / smtp.gmail.com]
+```
+
+**Key Design Principles:**
+- **Zero Trust Data Policy**: No email content, analysis results, or employee data leaves the host machine
+- **Transparent Interception**: Email clients require only an IMAP/SMTP server address change — no plugins or agents
+- **12-Dimension Scoring**: Every email is scored across 12 distinct psychological manipulation dimensions
+- **Real-Time Alerting**: WebSocket-driven dashboard receives alerts within seconds of email arrival
+- **Behavioral Baselines**: Per-sender communication pattern baselines detect deviation from normal behavior
 
 ---
 
-## 2. High-Level Architecture Diagram
+## 2. High-Level Architecture
 
+The system follows a pipeline architecture where each email passes through multiple analysis stages before a final risk score is computed and alerts are dispatched.
+
+```mermaid
+flowchart LR
+    A[Email Arrives] --> B[IMAP/SMTP Proxy]
+    B --> C[MIME Parser]
+    C --> D[Body Extraction]
+    D --> E[FastAPI Engine]
+    E --> F[Pre-Filter<br/>Regex Rules]
+    F --> G[Behavioral<br/>Baseline Lookup]
+    G --> H[Deviation<br/>Scorer]
+    H --> I[LLM Analysis<br/>Qwen3-8B]
+    I --> J[Score<br/>Aggregator]
+    J --> K{Score >= 35?}
+    K -->|Yes| L[Create Alert]
+    K -->|No| M[Log & Proceed]
+    L --> N[WebSocket Push<br/>to Dashboard]
+    L --> O[Inject Warning<br/>into Subject]
+    J --> P[Update Baseline<br/>Async]
 ```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                          ORGANIZATIONAL NETWORK BOUNDARY                        │
-│                                                                                 │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
-│  │  Thunderbird  │    │  Apple Mail  │    │   Outlook    │    │  Any Client  │  │
-│  │  (IMAP/SMTP) │    │  (IMAP/SMTP) │    │  (IMAP/SMTP) │    │  (IMAP/SMTP) │  │
-│  └──────┬───────┘    └──────┬───────┘    └──────┬───────┘    └──────┬───────┘  │
-│         │                  │                    │                   │           │
-│         └──────────────────┴────────────────────┴───────────────────┘           │
-│                                       │                                         │
-│                              localhost:1143 (IMAP)                              │
-│                              localhost:1025 (SMTP)                              │
-│                                       │                                         │
-│                         ┌─────────────▼──────────────┐                         │
-│                         │   MINDWALL IMAP/SMTP PROXY  │                         │
-│                         │   (mindwall-proxy:python)   │                         │
-│                         │                             │                         │
-│                         │  ┌────────────────────────┐ │                         │
-│                         │  │  SSL Termination Layer  │ │                         │
-│                         │  │  (upstream TLS handled) │ │                         │
-│                         │  └────────────┬───────────┘ │                         │
-│                         │               │              │                         │
-│                         │  ┌────────────▼───────────┐ │                         │
-│                         │  │   IMAP Command Parser   │ │                         │
-│                         │  │  (asyncio stream-based) │ │                         │
-│                         │  └────────────┬───────────┘ │                         │
-│                         │               │ FETCH intercept                       │
-│                         │  ┌────────────▼───────────┐ │                         │
-│                         │  │  Email Body Extractor   │ │                         │
-│                         │  │  (MIME parser + cleaner)│ │                         │
-│                         │  └────────────┬───────────┘ │                         │
-│                         └──────────────┬┴─────────────┘                         │
-│                                        │ HTTP POST (internal only)               │
-│                                        │                                         │
-│                         ┌──────────────▼──────────────┐                         │
-│                         │    FASTAPI CORE ENGINE       │                         │
-│                         │    (mindwall-api:8000)       │                         │
-│                         │                              │                         │
-│                         │  ┌────────────────────────┐  │                         │
-│                         │  │   Rule-Based Pre-Filter │  │                         │
-│                         │  │   (zero GPU, <5ms)      │  │                         │
-│                         │  └────────────┬───────────┘  │                         │
-│                         │               │ if passes     │                         │
-│                         │  ┌────────────▼───────────┐  │                         │
-│                         │  │  Behavioral Baseline    │  │                         │
-│                         │  │  Engine (SQLite)        │  │                         │
-│                         │  └────────────┬───────────┘  │                         │
-│                         │               │               │                         │
-│                         │  ┌────────────▼───────────┐  │                         │
-│                         │  │   LLM Analysis Engine   │  │                         │
-│                         │  │   (Ollama HTTP client)  │  │                         │
-│                         │  └────────────┬───────────┘  │                         │
-│                         │               │               │                         │
-│                         │  ┌────────────▼───────────┐  │                         │
-│                         │  │   Score Aggregator      │  │                         │
-│                         │  │   12-Dimension Scorer   │  │                         │
-│                         │  └────────────┬───────────┘  │                         │
-│                         │               │               │                         │
-│                         │  ┌────────────▼───────────┐  │                         │
-│                         │  │   Alert & DB Writer     │  │                         │
-│                         │  │   (SQLite + WebSocket)  │  │                         │
-│                         │  └────────────┬───────────┘  │                         │
-│                         └──────────────┬┴─────────────┘                         │
-│                                        │                                         │
-│              ┌─────────────────────────┼──────────────────────┐                 │
-│              │                         │                       │                 │
-│  ┌───────────▼──────────┐  ┌──────────▼──────────┐  ┌────────▼───────────────┐ │
-│  │   OLLAMA LLM SERVER  │  │  REACT DASHBOARD     │  │  BROWSER EXTENSION     │ │
-│  │  (mindwall-ollama)   │  │  (mindwall-ui:3000)  │  │  (Chrome/Firefox)      │ │
-│  │                      │  │                      │  │                        │ │
-│  │  Qwen3-8B           │  │  Real-time Alerts    │  │  Gmail Web Intercept   │ │
-│  │  Fine-tuned (LoRA)   │  │  WebSocket Feed      │  │  → localhost:8000      │ │
-│  │  GGUF Q5_K_M         │  │  Threat Dashboard    │  │  /api/analyze          │ │
-│  │  24GB GPU Server     │  │  Employee Risk View  │  │                        │ │
-│  └──────────────────────┘  └─────────────────────┘  └────────────────────────┘ │
-│                                                                                 │
-│  ┌──────────────────────────────────────────────────────────────────────────┐  │
-│  │                        UPSTREAM MAIL SERVERS                              │  │
-│  │          imap.gmail.com / outlook.office365.com / imap.yahoo.com          │  │
-│  └──────────────────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────────────┘
-```
+
+**Processing Time Breakdown:**
+| Stage | Typical Latency | GPU Required |
+|---|---|---|
+| Pre-Filter (regex) | < 5ms | No |
+| Baseline Lookup | < 10ms | No |
+| Deviation Scoring | < 5ms | No |
+| LLM Inference | 2–8 seconds | Yes (24GB VRAM) |
+| Score Aggregation | < 1ms | No |
+| DB Persistence | < 15ms | No |
+| WebSocket Broadcast | < 1ms | No |
 
 ---
 
-## 3. Complete Repository Structure
+## 3. Service Topology
 
+MindWall deploys as four Docker services interconnected via two Docker networks.
+
+```mermaid
+graph TB
+    subgraph "mindwall-host network (bridge)"
+        UI[mindwall-ui<br/>:4297<br/>React + Vite]
+        API_HOST[mindwall-api<br/>:5297<br/>FastAPI + Uvicorn]
+        PROXY_HOST[mindwall-proxy<br/>:1143 IMAP / :1025 SMTP]
+    end
+
+    subgraph "mindwall-internal network (bridge, isolated)"
+        OLLAMA[mindwall-ollama<br/>:11434 internal<br/>Qwen3-8B + GPU]
+        API_INT[mindwall-api]
+    end
+
+    API_HOST --- API_INT
+    API_INT -->|HTTP /api/generate| OLLAMA
+    UI -->|REST + WS| API_HOST
+    PROXY_HOST -->|HTTP /api/analyze| API_INT
+
+    CLIENT[Email Clients] -->|IMAP/SMTP| PROXY_HOST
+    BROWSER[Web Browser] -->|HTTP :4297| UI
 ```
-mindwall/
-│
-├── docker-compose.yml                    # Orchestrates all services
-├── docker-compose.override.yml           # Dev overrides (volume mounts, hot reload)
-├── .env.example                          # Environment variable template
-├── setup.sh                              # One-command bootstrapper
-├── Makefile                              # dev/prod task runner
-│
-├── proxy/                                # IMAP/SMTP Proxy Service
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   ├── main.py                           # Entrypoint — starts IMAP + SMTP proxy
-│   ├── imap/
-│   │   ├── __init__.py
-│   │   ├── server.py                     # asyncio IMAP server (listens localhost:1143)
-│   │   ├── upstream.py                   # asyncio connection to upstream IMAP server
-│   │   ├── parser.py                     # IMAP command/response parser (RFC 3501)
-│   │   ├── interceptor.py                # FETCH interceptor — extracts email bodies
-│   │   └── injector.py                   # Risk score injection into subject/header
-│   ├── smtp/
-│   │   ├── __init__.py
-│   │   ├── server.py                     # asyncio SMTP server (listens localhost:1025)
-│   │   └── upstream.py                   # Forwards to real SMTP server
-│   ├── mime/
-│   │   ├── __init__.py
-│   │   ├── parser.py                     # MIME email parser (text/html extraction)
-│   │   └── sanitizer.py                  # Strip HTML, normalize whitespace
-│   ├── ssl/
-│   │   ├── __init__.py
-│   │   └── handler.py                    # TLS termination + upstream TLS upgrade
-│   └── config.py                         # Proxy config (upstream hosts, ports)
-│
-├── api/                                  # FastAPI Core Engine Service
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   ├── main.py                           # FastAPI app factory
-│   ├── core/
-│   │   ├── __init__.py
-│   │   ├── config.py                     # Settings via pydantic-settings
-│   │   ├── lifespan.py                   # Startup/shutdown events
-│   │   └── logging.py                    # Structured JSON logging (structlog)
-│   ├── routers/
-│   │   ├── __init__.py
-│   │   ├── analyze.py                    # POST /api/analyze (from proxy + extension)
-│   │   ├── dashboard.py                  # GET /api/dashboard/* (stats, threats)
-│   │   ├── alerts.py                     # GET/PATCH /api/alerts/*
-│   │   ├── employees.py                  # GET/POST /api/employees/*
-│   │   ├── settings.py                   # GET/PUT /api/settings/*
-│   │   └── websocket.py                  # WS /ws/alerts (real-time push)
-│   ├── analysis/
-│   │   ├── __init__.py
-│   │   ├── pipeline.py                   # Orchestrates full analysis pipeline
-│   │   ├── prefilter.py                  # Rule-based fast filter (regex + keyword)
-│   │   ├── llm_client.py                 # Ollama HTTP client (async httpx)
-│   │   ├── prompt_builder.py             # Structured prompt construction
-│   │   ├── scorer.py                     # 12-dimension score parser + aggregator
-│   │   ├── behavioral/
-│   │   │   ├── __init__.py
-│   │   │   ├── baseline.py               # Per-sender communication baseline engine
-│   │   │   ├── deviation.py              # Deviation scoring vs baseline
-│   │   │   └── cross_channel.py          # Multi-channel coordination detector
-│   │   └── dimensions.py                 # 12 manipulation dimension definitions
-│   ├── db/
-│   │   ├── __init__.py
-│   │   ├── database.py                   # SQLAlchemy async engine (aiosqlite)
-│   │   ├── models.py                     # ORM models
-│   │   ├── repositories/
-│   │   │   ├── __init__.py
-│   │   │   ├── alert_repo.py
-│   │   │   ├── employee_repo.py
-│   │   │   ├── baseline_repo.py
-│   │   │   └── analysis_repo.py
-│   │   └── migrations/
-│   │       └── init_schema.sql           # Schema DDL
-│   ├── schemas/
-│   │   ├── __init__.py
-│   │   ├── analyze.py                    # Request/response pydantic models
-│   │   ├── alert.py
-│   │   ├── dashboard.py
-│   │   └── employee.py
-│   ├── websocket/
-│   │   ├── __init__.py
-│   │   ├── manager.py                    # WebSocket connection manager
-│   │   └── events.py                     # Event types + serializers
-│   └── middleware/
-│       ├── __init__.py
-│       ├── auth.py                       # API key auth (internal network only)
-│       └── request_id.py                 # Request tracing middleware
-│
-├── finetune/                             # Run locally on 8GB GPU
-│   ├── requirements.txt                  # unsloth, transformers, datasets, etc.
-│   ├── prepare_dataset.py                # Downloads + formats training data
-│   ├── train.py                          # Unsloth QLoRA fine-tuning script
-│   ├── evaluate.py                       # Evaluation against held-out test set
-│   ├── export.py                         # Merge LoRA + export to GGUF for Ollama
-│   ├── datasets/
-│   │   ├── download.sh                   # Pulls public phishing/SE corpora
-│   │   └── synthetic_generator.py        # Generates synthetic manipulation examples
-│   └── configs/
-│       └── qlora_config.yaml             # Training hyperparameters
-│
-├── dashboard/                            # React + Tailwind Admin UI
-│   ├── Dockerfile
-│   ├── package.json
-│   ├── tailwind.config.js
-│   ├── vite.config.js
-│   └── src/
-│       ├── main.jsx
-│       ├── App.jsx
-│       ├── api/
-│       │   ├── client.js                 # Axios instance + interceptors
-│       │   └── websocket.js              # WebSocket client manager
-│       ├── components/
-│       │   ├── layout/
-│       │   │   ├── Sidebar.jsx
-│       │   │   ├── TopBar.jsx
-│       │   │   └── Layout.jsx
-│       │   ├── alerts/
-│       │   │   ├── AlertCard.jsx         # Individual threat alert card
-│       │   │   ├── AlertFeed.jsx         # Real-time incoming alert feed
-│       │   │   └── AlertDetail.jsx       # Full breakdown modal
-│       │   ├── dashboard/
-│       │   │   ├── ThreatGauge.jsx       # Org-wide threat level gauge
-│       │   │   ├── DimensionRadar.jsx    # 12-dimension radar chart
-│       │   │   ├── ThreatTimeline.jsx    # Historical threat graph
-│       │   │   └── RiskHeatmap.jsx       # Employee risk heatmap
-│       │   └── employees/
-│       │       ├── EmployeeTable.jsx
-│       │       └── EmployeeRiskProfile.jsx
-│       └── pages/
-│           ├── Dashboard.jsx
-│           ├── Alerts.jsx
-│           ├── Employees.jsx
-│           └── Settings.jsx
-│
-├── extension/                            # Browser Extension (Gmail Web)
-│   ├── manifest.json                     # WebExtension Manifest V3
-│   ├── background.js                     # Service worker
-│   ├── content_gmail.js                  # Gmail DOM observer + extractor
-│   └── icons/
-│
-└── data/                                 # Docker volume mount (persistent)
-    ├── db/
-    │   └── mindwall.db                   # SQLite database
-    └── models/                           # Ollama model storage
+
+| Service | Container | Port | Image | Purpose |
+|---|---|---|---|---|
+| Ollama | `mindwall-ollama` | 11434 (internal) | `ollama/ollama:latest` | GPU LLM inference server |
+| API | `mindwall-api` | 5297 | `python:3.12-slim` | Analysis engine + REST API |
+| Proxy | `mindwall-proxy` | 1143, 1025 | `python:3.12-slim` | Transparent IMAP/SMTP interceptor |
+| Dashboard | `mindwall-ui` | 4297 | `node:20-alpine` | React admin interface |
+
+---
+
+## 4. Authentication & Authorization
+
+MindWall uses a two-layer authentication model: a dashboard login flow and an internal API key for service-to-service communication.
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Login as Login Page
+    participant API as FastAPI /auth/login
+    participant MW as Auth Middleware
+    participant Routes as Protected Routes
+
+    User->>Login: Enter username + password
+    Login->>API: POST /auth/login {username, password}
+    API->>API: hmac.compare_digest(credentials)
+    alt Valid Credentials
+        API-->>Login: 200 {api_key: "CD08..."}
+        Login->>Login: localStorage.set("mindwall_api_key")
+        Login-->>User: Redirect to Dashboard
+    else Invalid
+        API-->>Login: 401 Unauthorized
+        Login-->>User: Show error
+    end
+
+    User->>Routes: Navigate to /alerts
+    Routes->>MW: GET /api/alerts<br/>X-MindWall-Key: CD08...
+    MW->>MW: Validate API key
+    alt Valid Key
+        MW->>Routes: Pass through
+        Routes-->>User: Alert data
+    else Invalid/Missing
+        MW-->>User: 401 → Redirect to /login
+    end
+```
+
+**Authentication Details:**
+- **Dashboard Login**: `POST /auth/login` validates `username` + `password` against environment variables (`DASHBOARD_USERNAME`, `DASHBOARD_PASSWORD`) using `hmac.compare_digest` to prevent timing attacks
+- **API Key**: Returned on successful login; stored in `localStorage` as `mindwall_api_key`
+- **Request Interceptor**: Axios automatically attaches `X-MindWall-Key` header to every API request
+- **401 Auto-Redirect**: The Axios response interceptor clears the stored key and redirects to `/login` on any 401/403 response
+- **Public Paths**: `/auth/login`, `/health`, `/docs`, `/openapi.json`, `/favicon.ico` are excluded from auth
+
+**Default Credentials (configurable via .env):**
+```
+DASHBOARD_USERNAME=admin
+DASHBOARD_PASSWORD=MindWall@2026
 ```
 
 ---
 
-## 4. Service Definitions — docker-compose.yml
+## 5. Analysis Pipeline
 
-```yaml
-version: "3.9"
+The core analysis pipeline processes each email through 10 sequential stages. The pipeline is orchestrated by `api/analysis/pipeline.py`.
 
-services:
+```mermaid
+flowchart TD
+    START[Email Received] --> S1
 
-  ollama:
-    image: ollama/ollama:latest
-    container_name: mindwall-ollama
-    restart: always
-    volumes:
-      - ./data/models:/root/.ollama
-    environment:
-      - OLLAMA_NUM_PARALLEL=4
-      - OLLAMA_MAX_LOADED_MODELS=1
-      - OLLAMA_FLASH_ATTENTION=1
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    networks:
-      - mindwall-internal
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
+    S1[Stage 1: Rule-Based Pre-Filter<br/>Regex pattern matching<br/>Zero GPU / < 5ms]
+    S1 --> S2[Stage 2: Load Sender Baseline<br/>SQLite lookup by<br/>recipient + sender pair]
+    S2 --> S3[Stage 3: Compute Deviation<br/>Word count, timing,<br/>formality deviation]
+    S3 --> S4[Stage 4: LLM Analysis<br/>Qwen3-8B via Ollama<br/>12-dimension scoring]
+    S4 --> S5[Stage 5: Score Merge<br/>Blend LLM + behavioral<br/>deviation scores]
+    S5 --> S6[Stage 6: Severity Classification<br/>low / medium / high / critical]
+    S6 --> S7[Stage 7: Persist Analysis<br/>Insert into analyses table]
+    S7 --> S8{Stage 8: Score >= 35?}
+    S8 -->|Yes| S9[Stage 9: Create Alert<br/>+ WebSocket Broadcast]
+    S8 -->|No| S10
+    S9 --> S10[Stage 10: Update Baseline<br/>Async background task]
+    S10 --> DONE[Pipeline Complete]
 
-  api:
-    build:
-      context: ./api
-      dockerfile: Dockerfile
-    container_name: mindwall-api
-    restart: always
-    depends_on:
-      ollama:
-        condition: service_healthy
-    volumes:
-      - ./data/db:/app/data/db
-    environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
-      - OLLAMA_MODEL=qwen3:8b
-      - DATABASE_URL=sqlite+aiosqlite:////app/data/db/mindwall.db
-      - API_SECRET_KEY=${API_SECRET_KEY}
-      - LOG_LEVEL=INFO
-      - WORKERS=4
-    ports:
-      - "8000:8000"
-    networks:
-      - mindwall-internal
-      - mindwall-host
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-
-  proxy:
-    build:
-      context: ./proxy
-      dockerfile: Dockerfile
-    container_name: mindwall-proxy
-    restart: always
-    depends_on:
-      api:
-        condition: service_healthy
-    environment:
-      - API_BASE_URL=http://api:8000
-      - API_SECRET_KEY=${API_SECRET_KEY}
-      - IMAP_LISTEN_HOST=0.0.0.0
-      - IMAP_LISTEN_PORT=1143
-      - SMTP_LISTEN_HOST=0.0.0.0
-      - SMTP_LISTEN_PORT=1025
-      - LOG_LEVEL=INFO
-    ports:
-      - "1143:1143"       # IMAP — email clients connect here
-      - "1025:1025"       # SMTP — outbound (optional monitoring)
-    networks:
-      - mindwall-internal
-      - mindwall-host
-
-  dashboard:
-    build:
-      context: ./dashboard
-      dockerfile: Dockerfile
-    container_name: mindwall-ui
-    restart: always
-    depends_on:
-      - api
-    environment:
-      - VITE_API_BASE_URL=http://localhost:8000
-      - VITE_WS_URL=ws://localhost:8000/ws/alerts
-    ports:
-      - "3000:80"
-    networks:
-      - mindwall-host
-
-networks:
-  mindwall-internal:
-    driver: bridge
-    internal: true          # Ollama + API cannot reach internet directly
-  mindwall-host:
-    driver: bridge
+    style S1 fill:#1a1a2e,stroke:#e94560,color:#fff
+    style S4 fill:#1a1a2e,stroke:#0f3460,color:#fff
+    style S9 fill:#1a1a2e,stroke:#e94560,color:#fff
 ```
+
+**Severity Classification Thresholds (configurable at runtime):**
+
+| Score Range | Severity | Recommended Action | Default Threshold |
+|---|---|---|---|
+| 0–34 | `low` | Proceed | — |
+| 35–59 | `medium` | Proceed with caution | 35.0 |
+| 60–79 | `high` | Verify before acting | 60.0 |
+| 80–100 | `critical` | Block / escalate | 80.0 |
 
 ---
 
-## 5. Database Schema
+## 6. 12 Manipulation Dimensions
 
-```sql
--- migrations/init_schema.sql
+Every email is scored across 12 independent psychological manipulation dimensions. Each dimension has a defined weight used in the final aggregate score calculation.
 
-CREATE TABLE IF NOT EXISTS employees (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    email           TEXT NOT NULL UNIQUE,
-    display_name    TEXT,
-    department      TEXT,
-    risk_score      REAL DEFAULT 0.0,     -- rolling 30-day risk score
-    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS sender_baselines (
-    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-    recipient_email     TEXT NOT NULL,
-    sender_email        TEXT NOT NULL,
-    avg_word_count      REAL,
-    avg_sentence_length REAL,
-    typical_hours       TEXT,             -- JSON: [8,9,10,17,18] (typical send hours)
-    formality_score     REAL,             -- 0.0–1.0
-    typical_requests    TEXT,             -- JSON: common request types observed
-    sample_count        INTEGER DEFAULT 0,
-    last_updated        DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(recipient_email, sender_email)
-);
-
-CREATE TABLE IF NOT EXISTS analyses (
-    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
-    message_uid             TEXT NOT NULL,            -- IMAP UID or extension-generated ID
-    recipient_email         TEXT NOT NULL,
-    sender_email            TEXT NOT NULL,
-    sender_display_name     TEXT,
-    subject                 TEXT,
-    received_at             DATETIME,
-    analyzed_at             DATETIME DEFAULT CURRENT_TIMESTAMP,
-    channel                 TEXT NOT NULL,            -- 'imap' | 'gmail_web'
-    prefilter_triggered     BOOLEAN DEFAULT FALSE,
-    prefilter_signals       TEXT,                     -- JSON: list of triggered rules
-    manipulation_score      REAL,                     -- 0–100 aggregate
-    dimension_scores        TEXT,                     -- JSON: {dimension: score, ...}
-    explanation             TEXT,                     -- LLM plain-English explanation
-    recommended_action      TEXT,                     -- 'proceed' | 'verify' | 'block'
-    llm_raw_response        TEXT,                     -- Full LLM JSON output (stored for audit)
-    processing_time_ms      INTEGER,
-    UNIQUE(message_uid, recipient_email)
-);
-
-CREATE TABLE IF NOT EXISTS alerts (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    analysis_id     INTEGER NOT NULL REFERENCES analyses(id),
-    severity        TEXT NOT NULL,        -- 'low' | 'medium' | 'high' | 'critical'
-    acknowledged    BOOLEAN DEFAULT FALSE,
-    acknowledged_by TEXT,
-    acknowledged_at DATETIME,
-    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX idx_analyses_recipient   ON analyses(recipient_email, analyzed_at DESC);
-CREATE INDEX idx_analyses_score       ON analyses(manipulation_score DESC);
-CREATE INDEX idx_alerts_severity      ON alerts(severity, acknowledged, created_at DESC);
-CREATE INDEX idx_baselines_lookup     ON sender_baselines(recipient_email, sender_email);
+```mermaid
+mindmap
+    root((MindWall<br/>12 Dimensions))
+        Pressure Tactics
+            Artificial Urgency (12%)
+            Scarcity Tactics (7%)
+            Timing Anomaly (3%)
+        Authority & Trust
+            Authority Impersonation (15%)
+            Social Proof Manipulation (6%)
+            Reciprocity Exploitation (7%)
+        Emotional Manipulation
+            Fear/Threat Induction (12%)
+            Emotional Escalation (7%)
+        Behavioral Analysis
+            Sender Behavioral Deviation (12%)
+            Cross-Channel Coordination (8%)
+        Context Mismatch
+            Request Context Mismatch (6%)
+            Unusual Action Requested (5%)
 ```
+
+| # | Dimension | Weight | Description |
+|---|---|---|---|
+| 1 | `artificial_urgency` | 12% | Manufactured time pressure or false deadlines |
+| 2 | `authority_impersonation` | 15% | Falsely claiming or implying authority (CEO, legal, government) |
+| 3 | `fear_threat_induction` | 12% | Using threats, consequences, or fear to coerce action |
+| 4 | `reciprocity_exploitation` | 7% | Leveraging past favors or fabricated obligations |
+| 5 | `scarcity_tactics` | 7% | Creating false scarcity of time, resource, or opportunity |
+| 6 | `social_proof_manipulation` | 6% | Fabricating consensus or peer behavior to influence |
+| 7 | `sender_behavioral_deviation` | 12% | Deviation from this sender's established communication baseline |
+| 8 | `cross_channel_coordination` | 8% | Evidence of coordinated multi-channel attack |
+| 9 | `emotional_escalation` | 7% | Escalating emotional intensity to override rational thinking |
+| 10 | `request_context_mismatch` | 6% | Request inconsistent with stated context or relationship |
+| 11 | `unusual_action_requested` | 5% | Requesting atypical actions (wire transfer, credentials, gift cards) |
+| 12 | `timing_anomaly` | 3% | Suspicious timing relative to sender's typical patterns |
+
+**Total Weight: 100%** — All dimensions sum to 1.0.
 
 ---
 
-## 6. Core Analysis Pipeline
+## 7. Rule-Based Pre-Filter
 
-### 6.1 — 12 Manipulation Dimensions
+The pre-filter runs before LLM inference with zero GPU usage and sub-5ms latency. It applies regex and keyword pattern matching to identify common social engineering signals.
 
-```python
-# api/analysis/dimensions.py
-
-from dataclasses import dataclass
-from enum import Enum
-
-class Dimension(Enum):
-    ARTIFICIAL_URGENCY          = "artificial_urgency"
-    AUTHORITY_IMPERSONATION     = "authority_impersonation"
-    FEAR_THREAT_INDUCTION       = "fear_threat_induction"
-    RECIPROCITY_EXPLOITATION    = "reciprocity_exploitation"
-    SCARCITY_TACTICS            = "scarcity_tactics"
-    SOCIAL_PROOF_MANIPULATION   = "social_proof_manipulation"
-    SENDER_BEHAVIORAL_DEVIATION = "sender_behavioral_deviation"
-    CROSS_CHANNEL_COORDINATION  = "cross_channel_coordination"
-    EMOTIONAL_ESCALATION        = "emotional_escalation"
-    REQUEST_CONTEXT_MISMATCH    = "request_context_mismatch"
-    UNUSUAL_ACTION_REQUESTED    = "unusual_action_requested"
-    TIMING_ANOMALY              = "timing_anomaly"
-
-DIMENSION_WEIGHTS = {
-    Dimension.ARTIFICIAL_URGENCY:          0.12,
-    Dimension.AUTHORITY_IMPERSONATION:     0.15,
-    Dimension.FEAR_THREAT_INDUCTION:       0.12,
-    Dimension.RECIPROCITY_EXPLOITATION:    0.07,
-    Dimension.SCARCITY_TACTICS:            0.07,
-    Dimension.SOCIAL_PROOF_MANIPULATION:   0.06,
-    Dimension.SENDER_BEHAVIORAL_DEVIATION: 0.12,
-    Dimension.CROSS_CHANNEL_COORDINATION:  0.08,
-    Dimension.EMOTIONAL_ESCALATION:        0.07,
-    Dimension.REQUEST_CONTEXT_MISMATCH:    0.06,
-    Dimension.UNUSUAL_ACTION_REQUESTED:    0.05,
-    Dimension.TIMING_ANOMALY:              0.03,
-}
+```mermaid
+flowchart TD
+    INPUT[Email Subject + Body + Sender] --> U{Urgency Patterns?}
+    U -->|Match| UB[+5 score boost]
+    U -->|No| A{Authority Patterns?}
+    UB --> A
+    A -->|Match| AB[+8 score boost]
+    A -->|No| F{Fear/Threat Patterns?}
+    AB --> F
+    F -->|Match| FB[+7 score boost]
+    F -->|No| SR{Suspicious Requests?}
+    FB --> SR
+    SR -->|Match| SRB[+5 per match, max +20]
+    SR -->|No| EM{Emotional Patterns?}
+    SRB --> EM
+    EM -->|Match| EMB[+4 score boost]
+    EM -->|No| SP{Spoofed Sender?}
+    EMB --> SP
+    SP -->|Match| SPB[+10 score boost]
+    SP -->|No| TM{Unusual Hour?}
+    SPB --> TM
+    TM -->|Yes| TMB[+3 score boost]
+    TM -->|No| CAPS{ALL CAPS Subject?}
+    TMB --> CAPS
+    CAPS -->|Yes| CB[+3 score boost]
+    CAPS -->|No| EXC{Excessive !!!?}
+    CB --> EXC
+    EXC -->|>3| EB[+2 score boost]
+    EXC -->|No| RESULT[Pre-Filter Result<br/>signals + total boost]
+    EB --> RESULT
 ```
 
-### 6.2 — LLM Prompt Construction
+**Pattern Categories:**
+- **Urgency**: `immediately`, `urgent`, `asap`, `act now`, `expires today`, `last chance`
+- **Authority**: `CEO`, `CFO`, `on behalf of`, `compliance requirement`, `law enforcement`, `IRS`, `FBI`
+- **Fear/Threat**: `account suspended`, `legal action`, `prosecution`, `security breach`
+- **Suspicious Requests**: `wire transfer`, `gift card`, `click here`, `verify your account`, `keep this secret`
+- **Emotional**: `please help`, `desperate`, `counting on you`, `only you can`
+- **Spoofed Sender**: Domain patterns like `paypal.com-verify.xyz`
 
-```python
-# api/analysis/prompt_builder.py
+The maximum pre-filter score boost is configurable (default: 15.0) and is added to the LLM aggregate score.
 
-SYSTEM_PROMPT = """
-You are MindWall, a cybersecurity analysis engine specialized in detecting
-psychological manipulation tactics in business communications. You analyze
-emails and messages with clinical precision, identifying social engineering
-patterns used by attackers to manipulate recipients into unsafe actions.
+---
 
-You always respond with a valid JSON object and nothing else.
-""".strip()
+## 8. Behavioral Baseline Engine
 
-def build_analysis_prompt(
-    email_body: str,
-    sender_email: str,
-    sender_display_name: str,
-    subject: str,
-    received_hour: int,
-    baseline: dict | None,
-    prefilter_signals: list[str],
-) -> str:
-    baseline_context = ""
-    if baseline:
-        baseline_context = f"""
-SENDER BEHAVIORAL BASELINE (historical communication pattern):
-- Average word count per email: {baseline['avg_word_count']:.0f}
-- Average sentence length: {baseline['avg_sentence_length']:.1f} words
-- Typical send hours (UTC): {baseline['typical_hours']}
-- Formality score (0=casual, 1=formal): {baseline['formality_score']:.2f}
-- This email's send hour: {received_hour}
-- Word count deviation: {baseline.get('word_count_deviation', 'N/A')}
-"""
+MindWall builds per-sender behavioral baselines for each recipient. These baselines track historical communication patterns and flag deviations.
+
+```mermaid
+sequenceDiagram
+    participant E as Email Arrives
+    participant BE as Baseline Engine
+    participant DB as SQLite<br/>sender_baselines
+    participant DS as Deviation Scorer
+
+    E->>BE: get_baseline(recipient, sender)
+    BE->>DB: SELECT WHERE recipient + sender
+    alt Baseline Exists (sample_count > 0)
+        DB-->>BE: {avg_word_count, avg_sentence_length,<br/>typical_hours, formality_score}
+        BE-->>DS: baseline data
+        DS->>DS: Compare current email vs baseline
+        DS->>DS: word_count_deviation = (current - avg) / avg
+        DS->>DS: timing_deviation (hour vs typical_hours)
+        DS->>DS: formality_deviation
+        DS-->>E: deviation_score (0-100)
+    else No Baseline (new sender)
+        DB-->>BE: null
+        BE-->>DS: no baseline
+        DS-->>E: deviation_score = 0
+    end
+
+    Note over BE,DB: After analysis, baseline is<br/>updated asynchronously (Stage 10)
+    E->>BE: update_baseline(recipient, sender, body, time)
+    BE->>DB: UPSERT avg_word_count, sample_count++
+```
+
+**Baseline Fields:**
+| Field | Type | Description |
+|---|---|---|
+| `avg_word_count` | REAL | Rolling average email word count from this sender |
+| `avg_sentence_length` | REAL | Average sentence length in words |
+| `typical_hours` | JSON | Array of typical UTC send hours `[9,10,11,14,15]` |
+| `formality_score` | REAL | 0.0 (casual) to 1.0 (formal) communication style |
+| `typical_requests` | JSON | Common request types historically observed |
+| `sample_count` | INTEGER | Number of emails used to build baseline |
+
+**Deviation Score Blending:**
+The final `sender_behavioral_deviation` dimension score is a weighted blend:
+- 60% behavioral deviation engine score
+- 40% LLM assessment of behavioral deviation
+
+---
+
+## 9. Score Aggregation
+
+The Score Aggregator merges LLM dimension scores with behavioral deviation data and computes a single weighted aggregate manipulation score.
+
+```mermaid
+flowchart TD
+    LLM[LLM 12-Dimension Scores<br/>0-100 each] --> MERGE
+    BEH[Behavioral Deviation Score<br/>0-100] --> MERGE
+    MERGE[Score Merger<br/>Blend behavioral_deviation<br/>60% engine + 40% LLM] --> CLAMP[Clamp all scores 0-100]
+    CLAMP --> WEIGHT[Apply Dimension Weights<br/>Σ score_i × weight_i]
+    WEIGHT --> BOOST{Pre-filter<br/>boost > 0?}
+    BOOST -->|Yes| ADD[aggregate + boost<br/>capped at 100]
+    BOOST -->|No| FINAL
+    ADD --> FINAL[Final Aggregate Score<br/>0-100]
+    FINAL --> SEV{Classify Severity}
+    SEV -->|>= 80| CRIT[CRITICAL]
+    SEV -->|>= 60| HIGH[HIGH]
+    SEV -->|>= 35| MED[MEDIUM]
+    SEV -->|< 35| LOW[LOW]
+```
+
+**Formula:**
+```
+aggregate = Σ (dimension_score[i] × dimension_weight[i]) + prefilter_boost
+final_score = clamp(aggregate, 0, 100)
+```
+
+**Configurable Weights (runtime via Settings page):**
+| Parameter | Default | Range | Description |
+|---|---|---|---|
+| `behavioral_weight` | 0.6 | 0.0–1.0 | Weight of behavioral engine in deviation blend |
+| `llm_weight` | 0.4 | 0.0–1.0 | Weight of LLM in deviation blend |
+| `prefilter_score_boost` | 15.0 | 0–50 | Max pre-filter boost added to aggregate |
+
+---
+
+## 10. IMAP/SMTP Proxy
+
+The MindWall proxy is a transparent IMAP/SMTP interceptor that sits between email clients and upstream mail servers. It intercepts FETCH responses, extracts email bodies, sends them for analysis, and injects risk scores back into the email subject.
+
+```mermaid
+sequenceDiagram
+    participant Client as Email Client<br/>(Thunderbird / Outlook)
+    participant Proxy as MindWall Proxy<br/>:1143 / :1025
+    participant Upstream as Upstream IMAP<br/>imap.gmail.com:993
+    participant API as MindWall API<br/>:5297
+
+    Client->>Proxy: IMAP LOGIN user pass
+    Proxy->>Upstream: LOGIN user pass (TLS)
+    Upstream-->>Proxy: OK LOGIN
+    Proxy-->>Client: OK LOGIN
+
+    Client->>Proxy: FETCH 1:* (RFC822)
+    Proxy->>Upstream: FETCH 1:* (RFC822)
+    Upstream-->>Proxy: * 1 FETCH (RFC822 {body})
     
-    prefilter_context = ""
-    if prefilter_signals:
-        prefilter_context = f"\nFAST-FILTER PRE-SIGNALS DETECTED: {', '.join(prefilter_signals)}"
-
-    return f"""
-Analyze the following email for psychological manipulation tactics.
-{prefilter_context}
-{baseline_context}
-
-EMAIL METADATA:
-- Sender: {sender_display_name} <{sender_email}>
-- Subject: {subject}
-- Received Hour (UTC): {received_hour}
-
-EMAIL BODY:
----
-{email_body[:4000]}
----
-
-Score each of the following 12 manipulation dimensions from 0 to 100:
-- artificial_urgency: manufactured time pressure or deadline
-- authority_impersonation: falsely claiming or implying authority
-- fear_threat_induction: using threats, consequences, or fear
-- reciprocity_exploitation: leveraging past favors or obligations
-- scarcity_tactics: creating false scarcity of time, resource, or opportunity
-- social_proof_manipulation: fabricating consensus or peer behavior
-- sender_behavioral_deviation: deviation from this sender's typical communication style
-- cross_channel_coordination: evidence of coordinated multi-channel attack
-- emotional_escalation: escalating emotional intensity to override rational thinking
-- request_context_mismatch: the request is inconsistent with the stated context
-- unusual_action_requested: requesting actions atypical for legitimate business communication
-- timing_anomaly: suspicious timing relative to sender's typical patterns
-
-Respond ONLY with this JSON structure:
-{{
-    "dimension_scores": {{
-        "artificial_urgency": <0-100>,
-        "authority_impersonation": <0-100>,
-        "fear_threat_induction": <0-100>,
-        "reciprocity_exploitation": <0-100>,
-        "scarcity_tactics": <0-100>,
-        "social_proof_manipulation": <0-100>,
-        "sender_behavioral_deviation": <0-100>,
-        "cross_channel_coordination": <0-100>,
-        "emotional_escalation": <0-100>,
-        "request_context_mismatch": <0-100>,
-        "unusual_action_requested": <0-100>,
-        "timing_anomaly": <0-100>
-    }},
-    "primary_tactic": "<name of highest-scoring dimension>",
-    "explanation": "<1-2 sentence plain English explanation of what manipulation is occurring, written to warn a non-technical employee>",
-    "recommended_action": "<proceed|verify|block>",
-    "confidence": <0-100>
-}}
-"""
+    rect rgb(25, 25, 50)
+        Proxy->>Proxy: MIME Parse → Extract text/plain
+        Proxy->>API: POST /api/analyze<br/>{body, sender, recipient, uid}
+        API-->>Proxy: {manipulation_score: 72,<br/>severity: "high"}
+        Proxy->>Proxy: Inject "[⚠ MindWall: HIGH 72]"<br/>into Subject header
+    end
+    
+    Proxy-->>Client: Modified FETCH response<br/>with risk score in subject
 ```
 
-### 6.3 — Analysis Pipeline Orchestrator
+**Proxy Features:**
+- **Transparent**: No client modification required — just change IMAP/SMTP server to `localhost:1143` / `localhost:1025`
+- **TLS Termination**: Accepts plain connections from local clients, upgrades to TLS for upstream
+- **IMAP FETCH Interception**: Parses IMAP protocol, intercepts `FETCH` responses containing `RFC822` or `BODY[]`
+- **MIME Parsing**: Extracts `text/plain` and `text/html` (HTML stripped and sanitized) from multi-part MIME
+- **Score Injection**: Prepends `[⚠ MindWall: SEVERITY SCORE]` to the email Subject header
+- **SMTP Monitoring**: Outbound emails pass through for logging (no modification by default)
 
-```python
-# api/analysis/pipeline.py
+---
 
-import time
-import json
-import asyncio
-from datetime import datetime, timezone
+## 11. Email Account Management
 
-from .prefilter import PreFilter
-from .llm_client import OllamaClient
-from .prompt_builder import build_analysis_prompt, SYSTEM_PROMPT
-from .scorer import ScoreAggregator
-from .behavioral.baseline import BaselineEngine
-from .behavioral.deviation import DeviationScorer
-from ..db.repositories.analysis_repo import AnalysisRepository
-from ..db.repositories.alert_repo import AlertRepository
-from ..db.repositories.baseline_repo import BaselineRepository
-from ..websocket.manager import WebSocketManager
-from ..schemas.analyze import AnalyzeRequest, AnalyzeResponse
+Users configure their upstream email server connections through the dashboard Settings page. These configurations tell the proxy which IMAP/SMTP servers to connect to for each email account.
 
+```mermaid
+sequenceDiagram
+    actor Admin
+    participant UI as Dashboard Settings<br/>:4297/settings
+    participant API as FastAPI<br/>/api/email-accounts
+    participant DB as SQLite<br/>email_accounts table
+    participant Proxy as IMAP/SMTP Proxy
 
-class AnalysisPipeline:
-    def __init__(
-        self,
-        llm: OllamaClient,
-        analysis_repo: AnalysisRepository,
-        alert_repo: AlertRepository,
-        baseline_repo: BaselineRepository,
-        ws_manager: WebSocketManager,
-    ):
-        self.prefilter = PreFilter()
-        self.llm = llm
-        self.aggregator = ScoreAggregator()
-        self.baseline_engine = BaselineEngine(baseline_repo)
-        self.deviation_scorer = DeviationScorer()
-        self.analysis_repo = analysis_repo
-        self.alert_repo = alert_repo
-        self.ws_manager = ws_manager
+    Admin->>UI: Click "Add Account"
+    Admin->>UI: Fill IMAP/SMTP details
+    UI->>API: POST /api/email-accounts<br/>{email, imap_host, imap_port,<br/>smtp_host, smtp_port, username, password}
+    API->>DB: INSERT INTO email_accounts
+    DB-->>API: Account ID
+    API-->>UI: 201 Created
+    UI-->>Admin: Account appears in list
 
-    async def run(self, request: AnalyzeRequest) -> AnalyzeResponse:
-        start_time = time.monotonic()
+    Note over Proxy,DB: Proxy reads accounts<br/>for upstream connection config
 
-        # Stage 1: Rule-based prefilter (no GPU, <5ms)
-        prefilter_result = self.prefilter.evaluate(
-            subject=request.subject,
-            body=request.body,
-            sender_email=request.sender_email,
-            received_at=request.received_at,
-        )
+    Admin->>UI: Click delete icon
+    UI->>API: DELETE /api/email-accounts/:id
+    API->>DB: DELETE WHERE id = :id
+    API-->>UI: 200 Deleted
+    UI-->>Admin: Account removed from list
+```
 
-        # Stage 2: Load sender behavioral baseline
-        baseline = await self.baseline_engine.get_baseline(
-            recipient_email=request.recipient_email,
-            sender_email=request.sender_email,
-        )
+**Email Account Fields:**
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `email` | TEXT | required | Email address (unique identifier) |
+| `display_name` | TEXT | null | Human-readable name |
+| `imap_host` | TEXT | required | IMAP server hostname (e.g. `imap.gmail.com`) |
+| `imap_port` | INTEGER | 993 | IMAP port (993 for TLS, 143 for STARTTLS) |
+| `smtp_host` | TEXT | required | SMTP server hostname (e.g. `smtp.gmail.com`) |
+| `smtp_port` | INTEGER | 587 | SMTP port (587 for STARTTLS, 465 for TLS) |
+| `username` | TEXT | required | Login username (usually the email address) |
+| `password` | TEXT | required | App password or account password |
+| `use_tls` | BOOLEAN | true | Whether to use TLS for upstream connections |
+| `enabled` | BOOLEAN | true | Whether this account is actively proxied |
 
-        # Stage 3: Compute behavioral deviation scores
-        deviation_context = self.deviation_scorer.score(
-            body=request.body,
-            received_at=request.received_at,
-            baseline=baseline,
-        )
+**Common Provider Configurations:**
+| Provider | IMAP Host | IMAP Port | SMTP Host | SMTP Port |
+|---|---|---|---|---|
+| Gmail | `imap.gmail.com` | 993 | `smtp.gmail.com` | 587 |
+| Outlook/365 | `outlook.office365.com` | 993 | `smtp.office365.com` | 587 |
+| Yahoo | `imap.mail.yahoo.com` | 993 | `smtp.mail.yahoo.com` | 587 |
+| Zoho | `imap.zoho.com` | 993 | `smtp.zoho.com` | 587 |
 
-        # Stage 4: Build prompt and call LLM
-        prompt = build_analysis_prompt(
-            email_body=request.body,
-            sender_email=request.sender_email,
-            sender_display_name=request.sender_display_name,
-            subject=request.subject,
-            received_hour=request.received_at.hour if request.received_at else datetime.now(timezone.utc).hour,
-            baseline=baseline,
-            prefilter_signals=prefilter_result.signals,
-        )
+> **Gmail Users**: You must generate an **App Password** (Google Account → Security → 2-Step Verification → App passwords). Regular passwords will not work with Gmail's IMAP/SMTP.
 
-        llm_response_raw = await self.llm.generate(
-            system_prompt=SYSTEM_PROMPT,
-            user_prompt=prompt,
-        )
+---
 
-        llm_data = json.loads(llm_response_raw)
+## 12. Database Schema
 
-        # Stage 5: Merge LLM scores with behavioral deviation scores
-        final_scores = self.aggregator.merge(
-            llm_dimension_scores=llm_data["dimension_scores"],
-            behavioral_deviation_score=deviation_context.deviation_score,
-        )
-        aggregate_score = self.aggregator.compute_aggregate(final_scores)
+MindWall uses SQLite via aiosqlite for zero-dependency persistent storage. The schema contains 5 tables.
 
-        # Stage 6: Determine severity
-        severity = self._severity(aggregate_score)
+```mermaid
+erDiagram
+    employees {
+        int id PK
+        text email UK
+        text display_name
+        text department
+        real risk_score
+        datetime created_at
+        datetime updated_at
+    }
 
-        processing_ms = int((time.monotonic() - start_time) * 1000)
+    sender_baselines {
+        int id PK
+        text recipient_email
+        text sender_email
+        real avg_word_count
+        real avg_sentence_length
+        text typical_hours
+        real formality_score
+        text typical_requests
+        int sample_count
+        datetime last_updated
+    }
 
-        # Stage 7: Persist analysis record
-        analysis_id = await self.analysis_repo.insert(
-            message_uid=request.message_uid,
-            recipient_email=request.recipient_email,
-            sender_email=request.sender_email,
-            sender_display_name=request.sender_display_name,
-            subject=request.subject,
-            received_at=request.received_at,
-            channel=request.channel,
-            prefilter_triggered=prefilter_result.triggered,
-            prefilter_signals=prefilter_result.signals,
-            manipulation_score=aggregate_score,
-            dimension_scores=final_scores,
-            explanation=llm_data["explanation"],
-            recommended_action=llm_data["recommended_action"],
-            llm_raw_response=llm_response_raw,
-            processing_time_ms=processing_ms,
-        )
+    analyses {
+        int id PK
+        text message_uid
+        text recipient_email
+        text sender_email
+        text sender_display_name
+        text subject
+        datetime received_at
+        datetime analyzed_at
+        text channel
+        bool prefilter_triggered
+        text prefilter_signals
+        real manipulation_score
+        text dimension_scores
+        text explanation
+        text recommended_action
+        text llm_raw_response
+        int processing_time_ms
+    }
 
-        # Stage 8: Create alert if above threshold
-        if aggregate_score >= 35:
-            alert_id = await self.alert_repo.insert(
-                analysis_id=analysis_id,
-                severity=severity,
-            )
-            # Stage 9: Push real-time alert to dashboard
-            await self.ws_manager.broadcast({
-                "event": "new_alert",
-                "alert_id": alert_id,
-                "analysis_id": analysis_id,
-                "recipient_email": request.recipient_email,
-                "sender_email": request.sender_email,
-                "subject": request.subject,
-                "manipulation_score": aggregate_score,
-                "severity": severity,
-                "explanation": llm_data["explanation"],
-                "recommended_action": llm_data["recommended_action"],
-                "dimension_scores": final_scores,
-            })
+    alerts {
+        int id PK
+        int analysis_id FK
+        text severity
+        bool acknowledged
+        text acknowledged_by
+        datetime acknowledged_at
+        datetime created_at
+    }
 
-        # Stage 10: Update sender baseline asynchronously
-        asyncio.create_task(
-            self.baseline_engine.update_baseline(
-                recipient_email=request.recipient_email,
-                sender_email=request.sender_email,
-                body=request.body,
-                received_at=request.received_at,
-            )
-        )
+    email_accounts {
+        int id PK
+        text email UK
+        text display_name
+        text imap_host
+        int imap_port
+        text smtp_host
+        int smtp_port
+        text username
+        text password
+        bool use_tls
+        bool enabled
+        datetime created_at
+        datetime updated_at
+    }
 
-        return AnalyzeResponse(
-            analysis_id=analysis_id,
-            manipulation_score=aggregate_score,
-            severity=severity,
-            explanation=llm_data["explanation"],
-            recommended_action=llm_data["recommended_action"],
-            dimension_scores=final_scores,
-            processing_time_ms=processing_ms,
-        )
+    analyses ||--o{ alerts : "generates"
+    employees ||--o{ analyses : "recipient_email"
+    sender_baselines ||--o{ analyses : "sender pair"
+```
 
-    @staticmethod
-    def _severity(score: float) -> str:
-        if score >= 80:  return "critical"
-        if score >= 60:  return "high"
-        if score >= 35:  return "medium"
-        return "low"
+**Indexes for Performance:**
+```sql
+CREATE INDEX idx_analyses_recipient ON analyses(recipient_email, analyzed_at DESC);
+CREATE INDEX idx_analyses_score     ON analyses(manipulation_score DESC);
+CREATE INDEX idx_alerts_severity    ON alerts(severity, acknowledged, created_at DESC);
+CREATE INDEX idx_baselines_lookup   ON sender_baselines(recipient_email, sender_email);
 ```
 
 ---
 
-## 7. IMAP Proxy Architecture
+## 13. Dashboard UI
 
-```python
-# proxy/imap/server.py
+The React dashboard provides real-time monitoring, alert management, employee risk tracking, and system configuration.
 
-import asyncio
-import ssl
-from .upstream import UpstreamIMAPConnection
-from .interceptor import FetchInterceptor
-from .injector import RiskScoreInjector
+```mermaid
+flowchart TD
+    subgraph "Dashboard Pages"
+        LOGIN[Login Page<br/>Username + Password]
+        DASH[Dashboard<br/>Threat Gauge / Timeline<br/>Dimension Radar / Heatmap<br/>Stat Cards]
+        ALERTS[Alerts<br/>Real-time Alert Feed<br/>Acknowledge / Filter]
+        EMP[Employees<br/>Employee Table<br/>Risk Profiles]
+        SETTINGS[Settings<br/>Analysis Thresholds<br/>Email Accounts<br/>System Info]
+    end
 
-class MindWallIMAPServer:
-    """
-    Transparent IMAP proxy that:
-    1. Accepts connections from email clients on localhost:1143
-    2. Opens authenticated connection to upstream IMAP server
-    3. Intercepts FETCH responses containing email bodies
-    4. Sends body to MindWall API for analysis
-    5. Injects risk score into subject line before returning to client
-    """
+    subgraph "Components"
+        TG[ThreatGauge]
+        DR[DimensionRadar]
+        TT[ThreatTimeline]
+        RH[RiskHeatmap]
+        AF[AlertFeed]
+        AC[AlertCard]
+        AD[AlertDetail]
+        ET[EmployeeTable]
+        ERP[EmployeeRiskProfile]
+    end
 
-    def __init__(self, config: ProxyConfig):
-        self.config = config
-        self.interceptor = FetchInterceptor(config.api_base_url, config.api_secret_key)
-        self.injector = RiskScoreInjector()
-
-    async def handle_client(
-        self,
-        client_reader: asyncio.StreamReader,
-        client_writer: asyncio.StreamWriter,
-    ):
-        peer = client_writer.get_extra_info("peername")
-        upstream = UpstreamIMAPConnection(
-            host=self.config.upstream_imap_host,
-            port=self.config.upstream_imap_port,
-            use_ssl=True,
-        )
-        await upstream.connect()
-
-        try:
-            await self._pipe(client_reader, client_writer, upstream)
-        finally:
-            upstream.close()
-            client_writer.close()
-
-    async def _pipe(self, client_reader, client_writer, upstream):
-        """
-        Bidirectional pipe between client and upstream.
-        Intercepts FETCH responses at the data level.
-        """
-        client_to_upstream = asyncio.create_task(
-            self._forward_client_commands(client_reader, upstream)
-        )
-        upstream_to_client = asyncio.create_task(
-            self._forward_upstream_responses(upstream, client_writer)
-        )
-        done, pending = await asyncio.wait(
-            [client_to_upstream, upstream_to_client],
-            return_when=asyncio.FIRST_COMPLETED,
-        )
-        for task in pending:
-            task.cancel()
-
-    async def _forward_upstream_responses(self, upstream, client_writer):
-        """
-        Reads responses from upstream IMAP.
-        Detects FETCH responses containing RFC822/BODY content.
-        Passes through interceptor before writing to client.
-        """
-        async for line in upstream.read_lines():
-            processed = await self.interceptor.process_line(line)
-            client_writer.write(processed)
-            await client_writer.drain()
-
-    async def start(self):
-        server = await asyncio.start_server(
-            self.handle_client,
-            host=self.config.imap_listen_host,
-            port=self.config.imap_listen_port,
-        )
-        async with server:
-            await server.serve_forever()
+    LOGIN -->|Auth Success| DASH
+    DASH --> TG & DR & TT & RH
+    ALERTS --> AF & AC & AD
+    EMP --> ET & ERP
+    SETTINGS -->|Thresholds| API_SET[PUT /api/settings]
+    SETTINGS -->|Email Accts| API_EA[POST /api/email-accounts]
 ```
+
+**Dashboard Stat Cards (5 metrics):**
+| Card | Icon | Data Source |
+|---|---|---|
+| Emails Analyzed | Mail | `summary.total_analyses` |
+| Active Alerts | AlertTriangle | `summary.unacknowledged_alerts` (sum) |
+| Monitored Employees | Users | `summary.employee_count` |
+| Email Accounts | Inbox | `emailAccounts.length` |
+| Avg Threat Score | Shield | `summary.average_score` |
+
+**Settings Page Sections:**
+
+1. **Analysis Thresholds** — Runtime-configurable sliders:
+   - Critical Alert Threshold (default: 80)
+   - High Alert Threshold (default: 60)
+   - Medium Alert Threshold (default: 35)
+   - Pre-filter Score Boost (default: 15)
+   - Behavioral Deviation Weight (default: 0.6)
+   - LLM Analysis Weight (default: 0.4)
+
+2. **Email Accounts** — CRUD interface for IMAP/SMTP proxy configurations:
+   - Add Account form (email, display name, IMAP/SMTP host+port, username, password, TLS toggle)
+   - Account list with active/disabled status badges
+   - Delete account button
+
+3. **System Info** — Read-only display of API version, LLM model, database type, developer info
 
 ---
 
-## 8. Fine-Tuning Architecture (8GB GPU)
+## 14. Browser Extension
 
-```python
-# finetune/train.py
+The MindWall browser extension intercepts emails rendered in Gmail's web interface and sends them to the API for analysis.
 
-from unsloth import FastLanguageModel
-from trl import SFTTrainer
-from transformers import TrainingArguments
-from datasets import load_from_disk
+```mermaid
+sequenceDiagram
+    participant Gmail as Gmail Web UI
+    participant CS as Content Script<br/>content_gmail.js
+    participant BG as Background Worker<br/>background.js
+    participant API as MindWall API<br/>:5297
 
-MAX_SEQ_LENGTH = 2048
-MODEL_NAME = "unsloth/Qwen3-4B-Instruct-2507"
-OUTPUT_DIR = "./output/mindwall-lora"
-
-model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name=MODEL_NAME,
-    max_seq_length=MAX_SEQ_LENGTH,
-    dtype=None,          # auto-detect (bfloat16 on Ampere+)
-    load_in_4bit=True,   # QLoRA — fits 8GB
-)
-
-model = FastLanguageModel.get_peft_model(
-    model,
-    r=16,                    # LoRA rank
-    target_modules=[
-        "q_proj", "k_proj", "v_proj", "o_proj",
-        "gate_proj", "up_proj", "down_proj",
-    ],
-    lora_alpha=32,
-    lora_dropout=0.05,
-    bias="none",
-    use_gradient_checkpointing="unsloth",  # 30% VRAM reduction
-    random_state=42,
-)
-
-dataset = load_from_disk("./datasets/processed/mindwall_train")
-
-trainer = SFTTrainer(
-    model=model,
-    tokenizer=tokenizer,
-    train_dataset=dataset,
-    dataset_text_field="text",
-    max_seq_length=MAX_SEQ_LENGTH,
-    args=TrainingArguments(
-        per_device_train_batch_size=2,
-        gradient_accumulation_steps=8,     # effective batch = 16
-        warmup_steps=100,
-        num_train_epochs=3,
-        learning_rate=2e-4,
-        fp16=False,
-        bf16=True,
-        logging_steps=25,
-        optim="adamw_8bit",
-        weight_decay=0.01,
-        lr_scheduler_type="cosine",
-        output_dir=OUTPUT_DIR,
-        save_strategy="epoch",
-    ),
-)
-
-trainer.train()
-model.save_pretrained_merged(
-    "./output/mindwall-merged",
-    tokenizer,
-    save_method="merged_16bit",
-)
+    Gmail->>Gmail: User opens email
+    CS->>CS: MutationObserver detects<br/>new email DOM node
+    CS->>CS: Extract sender, subject,<br/>body from DOM
+    CS->>BG: chrome.runtime.sendMessage<br/>{type: "ANALYZE_EMAIL", data}
+    BG->>API: POST /api/analyze<br/>X-MindWall-Key header
+    API-->>BG: {manipulation_score, severity,<br/>explanation, recommended_action}
+    BG-->>CS: Analysis result
+    CS->>Gmail: Inject warning banner<br/>if score >= 35
 ```
 
-### Training Data Sources (all public domain / permissive license)
+**Extension Configuration (manifest.json):**
+- **Manifest Version**: 3
+- **Permissions**: `activeTab`, `storage`
+- **Host Permissions**: `http://localhost:5297/*`
+- **Content Scripts**: Injected on `*://mail.google.com/*`
+- **Service Worker**: `background.js`
 
+---
+
+## 15. Fine-Tuning Pipeline
+
+MindWall includes a complete QLoRA fine-tuning pipeline using Unsloth for training a manipulation-detection specialist model on an 8GB GPU.
+
+```mermaid
+flowchart TD
+    subgraph "Data Preparation"
+        DL[Download Public Datasets<br/>PhishTank / CEAS / Enron] --> PREP[prepare_dataset.py<br/>Format into ChatML]
+        SYN[synthetic_generator.py<br/>Generate labeled examples] --> PREP
+        PREP --> DS[Processed Dataset<br/>~50K examples]
+    end
+
+    subgraph "Training (8GB GPU)"
+        DS --> LOAD[Load Qwen3-4B-Instruct-2507<br/>4-bit quantized via Unsloth]
+        LOAD --> LORA[Apply LoRA Adapters<br/>r=16, alpha=32<br/>Target: q/k/v/o/gate/up/down proj]
+        LORA --> TRAIN[SFTTrainer<br/>3 epochs, lr=2e-4<br/>batch=2, grad_accum=8<br/>bf16 + 8bit AdamW]
+        TRAIN --> SAVE[Save LoRA Checkpoint]
+    end
+
+    subgraph "Export to Ollama"
+        SAVE --> MERGE[Merge LoRA + Base Weights<br/>export.py]
+        MERGE --> GGUF[Convert to GGUF Q5_K_M]
+        GGUF --> OLLAMA[Create Ollama Model<br/>ollama create mindwall]
+    end
+
+    style TRAIN fill:#1a1a2e,stroke:#e94560,color:#fff
+```
+
+**Training Configuration:**
+| Parameter | Value |
+|---|---|
+| Base Model | `unsloth/Qwen3-4B-Instruct-2507` |
+| Quantization | 4-bit (QLoRA) — fits 8GB VRAM |
+| LoRA Rank | 16 |
+| LoRA Alpha | 32 |
+| LoRA Dropout | 0.05 |
+| Learning Rate | 2e-4 |
+| Scheduler | Cosine annealing |
+| Epochs | 3 |
+| Effective Batch Size | 16 (2 × 8 gradient accumulation) |
+| Max Sequence Length | 2048 tokens |
+| Precision | bf16 |
+| Optimizer | AdamW 8-bit |
+| VRAM Usage | ~6–7GB peak |
+
+**Training Data Sources (public domain / permissive license):**
 | Dataset | Source | Size | Content |
 |---|---|---|---|
 | PhishTank | phishtank.com | ~1.5M | Known phishing URLs + content |
 | CEAS 2008 | Spam corpus | ~30K | Phishing emails labeled |
-| Enron Phishing | CMU | ~1.7K | Annotated phishing in enterprise context |
+| Enron Phishing | CMU CERT | ~1.7K | Annotated phishing in enterprise context |
 | CSIRO Social Engineering | research.csiro.au | ~500 | Social engineering transcripts |
-| Synthetic (generated) | synthetic_generator.py | ~20K | GPT-4 generated labeled examples |
+| Synthetic | `synthetic_generator.py` | ~20K | Model-generated labeled examples |
 
 ---
 
-## 9. Browser Extension (Gmail Web)
+## 16. API Reference
 
+All endpoints require the `X-MindWall-Key` header unless listed as public.
+
+```mermaid
+flowchart LR
+    subgraph "Public (No Auth)"
+        H[GET /health]
+        L[POST /auth/login]
+    end
+
+    subgraph "Protected (X-MindWall-Key)"
+        AN[POST /api/analyze]
+        DS[GET /api/dashboard/summary]
+        DT[GET /api/dashboard/timeline]
+        AG[GET /api/alerts]
+        AD2[GET /api/alerts/:id]
+        AA[PATCH /api/alerts/:id/acknowledge]
+        EL[GET /api/employees]
+        EC[POST /api/employees]
+        ER[GET /api/employees/:email/risk-profile]
+        SG[GET /api/settings]
+        SU[PUT /api/settings]
+        EAL[GET /api/email-accounts]
+        EAC[POST /api/email-accounts]
+        EAD[DELETE /api/email-accounts/:id]
+        WS[WS /ws/alerts]
+    end
+```
+
+### Authentication
+
+| Endpoint | Method | Auth | Description |
+|---|---|---|---|
+| `/auth/login` | POST | Public | Validate credentials, return API key |
+| `/health` | GET | Public | Service health check |
+
+### Analysis
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/analyze` | POST | Submit email for full pipeline analysis |
+
+**Request:**
 ```json
-// extension/manifest.json
 {
-  "manifest_version": 3,
-  "name": "MindWall",
-  "version": "1.0.0",
-  "description": "Real-time manipulation detection for Gmail",
-  "permissions": ["activeTab", "scripting"],
-  "host_permissions": ["https://mail.google.com/*"],
-  "content_scripts": [
-    {
-      "matches": ["https://mail.google.com/*"],
-      "js": ["content_gmail.js"],
-      "run_at": "document_idle"
-    }
-  ],
-  "background": {
-    "service_worker": "background.js"
-  }
+  "message_uid": "IMAP-12345",
+  "recipient_email": "employee@company.com",
+  "sender_email": "ceo@company-verify.com",
+  "sender_display_name": "CEO John Smith",
+  "subject": "URGENT: Wire Transfer Required Immediately",
+  "body": "I need you to process a wire transfer of $45,000...",
+  "channel": "imap",
+  "received_at": "2026-03-18T08:30:00Z"
 }
 ```
 
-The content script uses a `MutationObserver` to detect when Gmail renders an email body in the DOM, extracts the sender, subject, and body text, and POSTs to `http://localhost:8000/api/analyze`. On receiving the response, it injects a colored risk badge directly into the Gmail message header DOM element.
+**Response:**
+```json
+{
+  "analysis_id": 42,
+  "manipulation_score": 87.3,
+  "severity": "critical",
+  "explanation": "This email impersonates executive authority and creates artificial urgency to request an unusual wire transfer.",
+  "recommended_action": "block",
+  "dimension_scores": {
+    "artificial_urgency": 92,
+    "authority_impersonation": 88,
+    "fear_threat_induction": 45,
+    "unusual_action_requested": 95,
+    "...": "..."
+  },
+  "processing_time_ms": 3421
+}
+```
+
+### Dashboard
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/dashboard/summary` | GET | Aggregate stats: total analyses, alert counts, avg score, heatmap |
+| `/api/dashboard/timeline` | GET | Time-series threat data (query: `start_date`, `end_date`) |
+
+### Alerts
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/alerts` | GET | List alerts (query: `severity`, `acknowledged`, `limit`, `offset`) |
+| `/api/alerts/:id` | GET | Full alert detail with analysis breakdown |
+| `/api/alerts/:id/acknowledge` | PATCH | Mark alert as acknowledged |
+
+### Employees
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/employees` | GET | List monitored employees |
+| `/api/employees` | POST | Register new employee for monitoring |
+| `/api/employees/:email/risk-profile` | GET | Employee risk profile with analysis history |
+
+### Settings
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/settings` | GET | Current system settings |
+| `/api/settings` | PUT | Update thresholds and weights (runtime) |
+
+### Email Accounts
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/email-accounts` | GET | List configured email accounts (passwords redacted) |
+| `/api/email-accounts` | POST | Create or update email account (upsert by email) |
+| `/api/email-accounts/:id` | DELETE | Remove email account configuration |
+
+### WebSocket
+
+| Endpoint | Protocol | Description |
+|---|---|---|
+| `/ws/alerts` | WebSocket | Real-time alert push (JSON frames) |
 
 ---
 
-## 10. Environment Variables
+## 17. Docker Deployment
 
+### Quick Start
+
+**Linux / macOS:**
 ```bash
-# .env.example
+git clone https://github.com/vrip7/MindWall.git
+cd MindWall
+chmod +x setup.sh && ./setup.sh
+```
 
-# API
-API_SECRET_KEY=<generate with: openssl rand -hex 32>
-DATABASE_URL=sqlite+aiosqlite:////app/data/db/mindwall.db
+**Windows:**
+```powershell
+git clone https://github.com/vrip7/MindWall.git
+cd MindWall
+.\setup.ps1
+```
+
+**Manual:**
+```bash
+cp .env.example .env          # Edit with your API_SECRET_KEY
+docker compose up -d --build
+# Wait for Ollama health check (~60s), then:
+docker exec mindwall-ollama ollama pull qwen3:8b
+```
+
+### Service Health Verification
+
+```mermaid
+sequenceDiagram
+    participant D as docker compose up
+    participant O as Ollama
+    participant A as API
+    participant P as Proxy
+    participant U as Dashboard
+
+    D->>O: Start container
+    O->>O: Health: curl http://localhost:11434/api/tags
+    O-->>D: Healthy (start_period: 60s)
+    D->>A: Start (depends: ollama healthy)
+    A->>A: Health: curl http://localhost:5297/health
+    A-->>D: Healthy
+    D->>P: Start (depends: api healthy)
+    D->>U: Start (depends: api)
+    
+    Note over D,U: All 4 services running
+```
+
+### Port Mapping
+
+| Service | Container Port | Host Port | Protocol |
+|---|---|---|---|
+| Dashboard | 4297 | 4297 | HTTP |
+| API | 5297 | 5297 | HTTP |
+| Ollama | 11434 | — (internal) | HTTP |
+| IMAP Proxy | 1143 | 1143 | IMAP |
+| SMTP Proxy | 1025 | 1025 | SMTP |
+
+### Docker Networks
+
+| Network | Type | Services | Purpose |
+|---|---|---|---|
+| `mindwall-internal` | bridge (isolated) | ollama, api | GPU inference — no internet access |
+| `mindwall-host` | bridge | api, proxy, dashboard | Host-facing services |
+
+---
+
+## 18. Security Model
+
+```mermaid
+flowchart TD
+    subgraph "Network Boundary"
+        EXT[External Network] ---|Blocked| INT[Internal Network]
+        
+        subgraph "mindwall-internal (no internet)"
+            OLLAMA[Ollama<br/>GPU Server]
+            API_INT[API Engine]
+        end
+        
+        subgraph "mindwall-host"
+            API_HOST[API :5297]
+            PROXY[Proxy :1143/:1025]
+            DASH[Dashboard :4297]
+        end
+    end
+
+    CLIENT[Local Clients] -->|Localhost only| PROXY
+    CLIENT -->|Localhost only| DASH
+    API_HOST -->|Internal only| OLLAMA
+    PROXY -->|TLS encrypted| UPSTREAM[Upstream Mail<br/>Servers]
+```
+
+**Security Layers:**
+
+1. **Network Isolation**: Ollama runs on an internal-only Docker network with no internet access. Only the API container can reach it.
+
+2. **Authentication**: All API endpoints require `X-MindWall-Key` header. Dashboard login uses `hmac.compare_digest` for timing-attack-safe credential comparison.
+
+3. **TLS Upstream**: Proxy connections to upstream IMAP/SMTP servers use TLS encryption.
+
+4. **No Data Exfiltration**: All email content, analysis results, and LLM inference stay within the Docker network boundary. Zero external API calls.
+
+5. **Request ID Tracing**: Every request receives a unique `X-Request-ID` header for audit trail logging.
+
+6. **Input Validation**: All API inputs validated via Pydantic models with strict type enforcement and bounds checking.
+
+7. **Password Storage**: Email account passwords stored in SQLite — in production, use disk encryption and restrict filesystem access to the Docker volume.
+
+8. **CORS**: Restricted to `http://localhost:4297` (dashboard) and browser extension origins only.
+
+---
+
+## 19. Repository Structure
+
+```
+mindwall/
+├── docker-compose.yml                    # 4-service orchestration
+├── docker-compose.override.yml           # Dev overrides (hot reload, volume mounts)
+├── .env                                  # Environment variables (secret key, credentials)
+├── setup.sh / setup.ps1                  # One-command bootstrap scripts
+├── Makefile                              # dev/prod task runner
+├── Docs.md                              # This document
+├── README.md                            # Project overview
+│
+├── api/                                  # FastAPI Core Engine
+│   ├── main.py                           # App factory + router registration
+│   ├── core/
+│   │   ├── config.py                     # Pydantic Settings (env vars)
+│   │   ├── lifespan.py                   # Startup/shutdown lifecycle
+│   │   └── logging.py                    # Structured JSON logging (structlog)
+│   ├── routers/
+│   │   ├── analyze.py                    # POST /api/analyze
+│   │   ├── auth.py                       # POST /auth/login
+│   │   ├── dashboard.py                  # GET /api/dashboard/*
+│   │   ├── alerts.py                     # GET/PATCH /api/alerts/*
+│   │   ├── employees.py                  # GET/POST /api/employees/*
+│   │   ├── settings.py                   # GET/PUT /api/settings
+│   │   ├── email_accounts.py             # GET/POST/DELETE /api/email-accounts
+│   │   └── websocket.py                  # WS /ws/alerts
+│   ├── analysis/
+│   │   ├── pipeline.py                   # 10-stage analysis orchestrator
+│   │   ├── prefilter.py                  # Regex pre-filter (zero GPU)
+│   │   ├── llm_client.py                 # Ollama HTTP client (async httpx)
+│   │   ├── prompt_builder.py             # Structured prompt construction
+│   │   ├── scorer.py                     # 12-dimension score aggregator
+│   │   ├── dimensions.py                 # Dimension definitions + weights
+│   │   └── behavioral/
+│   │       ├── baseline.py               # Per-sender baseline engine
+│   │       ├── deviation.py              # Deviation scoring
+│   │       └── cross_channel.py          # Multi-channel coordination
+│   ├── db/
+│   │   ├── database.py                   # Async SQLAlchemy engine + DDL
+│   │   ├── models.py                     # ORM models (5 tables)
+│   │   ├── repositories/                 # Data access layer
+│   │   └── migrations/
+│   │       └── init_schema.sql           # Schema DDL
+│   ├── schemas/                          # Pydantic request/response models
+│   ├── middleware/
+│   │   ├── auth.py                       # API key validation middleware
+│   │   └── request_id.py                 # Request tracing
+│   └── websocket/
+│       ├── manager.py                    # WS connection manager
+│       └── events.py                     # Event type definitions
+│
+├── proxy/                                # IMAP/SMTP Proxy Service
+│   ├── main.py                           # Starts IMAP + SMTP servers
+│   ├── config.py                         # Proxy configuration
+│   ├── imap/
+│   │   ├── server.py                     # Async IMAP server (:1143)
+│   │   ├── upstream.py                   # TLS connection to upstream IMAP
+│   │   ├── parser.py                     # RFC 3501 IMAP parser
+│   │   ├── interceptor.py                # FETCH response interceptor
+│   │   └── injector.py                   # Risk score subject injection
+│   ├── smtp/
+│   │   ├── server.py                     # Async SMTP server (:1025)
+│   │   └── upstream.py                   # Forward to upstream SMTP
+│   ├── mime/
+│   │   ├── parser.py                     # MIME email body extractor
+│   │   └── sanitizer.py                  # HTML stripping + normalization
+│   └── ssl/
+│       └── handler.py                    # TLS termination/upgrade
+│
+├── dashboard/                            # React + Tailwind Admin UI
+│   ├── src/
+│   │   ├── App.jsx                       # Auth gating + routing
+│   │   ├── api/
+│   │   │   ├── client.js                 # Axios HTTP client + interceptors
+│   │   │   └── websocket.js              # WebSocket client manager
+│   │   ├── components/
+│   │   │   ├── layout/                   # Sidebar, TopBar, Layout
+│   │   │   ├── dashboard/               # ThreatGauge, Radar, Timeline, Heatmap
+│   │   │   ├── alerts/                  # AlertCard, AlertFeed, AlertDetail
+│   │   │   └── employees/              # EmployeeTable, RiskProfile
+│   │   └── pages/
+│   │       ├── Login.jsx                 # Authentication page
+│   │       ├── Dashboard.jsx             # Main overview (5 stat cards + charts)
+│   │       ├── Alerts.jsx                # Alert management
+│   │       ├── Employees.jsx             # Employee monitoring
+│   │       └── Settings.jsx              # Thresholds + Email Accounts + System Info
+│
+├── extension/                            # Browser Extension (Gmail)
+│   ├── manifest.json                     # WebExtension Manifest V3
+│   ├── background.js                     # Service worker
+│   └── content_gmail.js                  # Gmail DOM observer + extractor
+│
+└── finetune/                             # QLoRA Fine-Tuning Pipeline
+    ├── train.py                          # Unsloth training script
+    ├── prepare_dataset.py                # Data formatting
+    ├── evaluate.py                       # Evaluation
+    ├── export.py                         # LoRA merge + GGUF export
+    ├── configs/
+    │   └── qlora_config.yaml             # Hyperparameters
+    └── datasets/
+        ├── download.sh / download.ps1    # Public dataset download
+        └── synthetic_generator.py        # Synthetic example generation
+```
+
+---
+
+## 20. Environment Configuration
+
+Create a `.env` file in the project root:
+
+```env
+# Authentication
+API_SECRET_KEY=your-secret-key-here
+DASHBOARD_USERNAME=admin
+DASHBOARD_PASSWORD=MindWall@2026
+
+# LLM Configuration
 OLLAMA_BASE_URL=http://ollama:11434
 OLLAMA_MODEL=qwen3:8b
 OLLAMA_TIMEOUT_SECONDS=30
+
+# Database
+DATABASE_URL=sqlite+aiosqlite:////app/data/db/mindwall.db
+
+# Logging
 LOG_LEVEL=INFO
+
+# Workers
 WORKERS=4
 
-# Proxy
-IMAP_LISTEN_HOST=0.0.0.0
-IMAP_LISTEN_PORT=1143
-SMTP_LISTEN_HOST=0.0.0.0
-SMTP_LISTEN_PORT=1025
+# Analysis Thresholds
+ALERT_MEDIUM_THRESHOLD=35.0
+ALERT_HIGH_THRESHOLD=60.0
+ALERT_CRITICAL_THRESHOLD=80.0
 
-# Alert Thresholds
-ALERT_MEDIUM_THRESHOLD=35
-ALERT_HIGH_THRESHOLD=60
-ALERT_CRITICAL_THRESHOLD=80
+# Pipeline Weights
+PREFILTER_SCORE_BOOST=15.0
+BEHAVIORAL_WEIGHT=0.6
+LLM_WEIGHT=0.4
 ```
 
----
-
-## 11. API Endpoints Reference
-
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/api/analyze` | Submit email for analysis (proxy + extension) |
-| `GET` | `/api/dashboard/summary` | Org-wide threat summary stats |
-| `GET` | `/api/dashboard/timeline` | Threat score timeline (with date range) |
-| `GET` | `/api/alerts` | Paginated alert list with filters |
-| `GET` | `/api/alerts/{id}` | Full alert detail with dimension breakdown |
-| `PATCH` | `/api/alerts/{id}/acknowledge` | Mark alert as acknowledged |
-| `GET` | `/api/employees` | Employee list with rolling risk scores |
-| `GET` | `/api/employees/{email}/risk-profile` | Full risk profile + sender baselines |
-| `GET` | `/api/settings` | Current system settings |
-| `PUT` | `/api/settings` | Update thresholds, upstream IMAP configs |
-| `GET` | `/health` | Service health (used by Docker healthcheck) |
-| `WS` | `/ws/alerts` | Real-time WebSocket feed for dashboard |
+**Email Client Configuration:**
+| Client | IMAP Server | IMAP Port | SMTP Server | SMTP Port | Security |
+|---|---|---|---|---|---|
+| Thunderbird | `localhost` | 1143 | `localhost` | 1025 | None (local) |
+| Outlook | `localhost` | 1143 | `localhost` | 1025 | None (local) |
+| Apple Mail | `localhost` | 1143 | `localhost` | 1025 | None (local) |
 
 ---
 
-## 12. Security Considerations
-
-- The API listens on `0.0.0.0:8000` but should be firewalled to LAN only at the network level
-- All inter-service communication is on the internal Docker bridge network — Ollama is never exposed externally
-- The IMAP proxy never stores email content — only the extracted plain-text body is sent to the API, which stores only the LLM explanation and scores, never the raw email body
-- API authentication uses a pre-shared secret key passed via `X-MindWall-Key` header — all internal services use this same key
-- The SQLite database is stored on a host-mounted volume for persistence and backup compatibility
-- SSL certificates for upstream IMAP connections are validated against system trust store — no SSL stripping occurs upstream
-
----
-
-## 13. One-Command Setup
-
-```bash
-#!/usr/bin/env bash
-# setup.sh
-
-set -euo pipefail
-
-echo "[MindWall] Checking dependencies..."
-command -v docker >/dev/null 2>&1 || { echo "Docker required."; exit 1; }
-command -v docker compose >/dev/null 2>&1 || { echo "Docker Compose required."; exit 1; }
-nvidia-smi >/dev/null 2>&1 || { echo "NVIDIA GPU + drivers required."; exit 1; }
-
-echo "[MindWall] Generating secrets..."
-cp -n .env.example .env
-SECRET=$(openssl rand -hex 32)
-sed -i "s|API_SECRET_KEY=.*|API_SECRET_KEY=${SECRET}|" .env
-
-echo "[MindWall] Creating data directories..."
-mkdir -p data/db data/models
-
-echo "[MindWall] Building and starting services..."
-docker compose up -d --build
-
-echo "[MindWall] Pulling LLM model (this may take a few minutes)..."
-docker compose exec ollama ollama pull qwen3:8b
-
-echo ""
-echo "✅ MindWall is running."
-echo "   Dashboard:      http://localhost:3000"
-echo "   API:            http://localhost:8000"
-echo "   IMAP Proxy:     localhost:1143"
-echo ""
-echo "   Point your email client's IMAP server to: localhost:1143"
-```
+*MindWall — Cognitive Firewall. Developed by [Pradyumn Tandon](https://pradyumntandon.com) at [VRIP7](https://vrip7.com).*

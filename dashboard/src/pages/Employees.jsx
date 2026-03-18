@@ -15,6 +15,7 @@ export default function Employees() {
   const [loading, setLoading] = useState(true)
   const [selectedEmail, setSelectedEmail] = useState(null)
   const [showAddForm, setShowAddForm] = useState(false)
+  const [deleting, setDeleting] = useState(null)
 
   const fetchEmployees = useCallback(async () => {
     try {
@@ -30,6 +31,20 @@ export default function Employees() {
   useEffect(() => {
     fetchEmployees()
   }, [fetchEmployees])
+
+  const handleDelete = useCallback(async (id, name) => {
+    if (!window.confirm(`Remove employee "${name}"? This cannot be undone.`)) return
+    setDeleting(id)
+    try {
+      await api.deleteEmployee(id)
+      setEmployees((prev) => prev.filter((e) => e.id !== id))
+    } catch (err) {
+      console.error('Failed to delete employee:', err)
+      alert('Failed to remove employee.')
+    } finally {
+      setDeleting(null)
+    }
+  }, [])
 
   return (
     <div className="space-y-4">
@@ -55,6 +70,7 @@ export default function Employees() {
         <EmployeeTable
           employees={employees}
           onSelect={(email) => setSelectedEmail(email)}
+          onDelete={handleDelete}
         />
       )}
 

@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     behavioral_weight: float = 0.6
     llm_weight: float = 0.4
 
+    # Proxy ports (for connection info display)
+    proxy_imap_port: int = 1143
+    proxy_smtp_port: int = 1025
+
 
 @lru_cache()
 def get_settings() -> Settings:

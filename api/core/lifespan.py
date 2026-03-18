@@ -70,6 +70,9 @@ async def lifespan(app: FastAPI):
     app.state.employee_repo = employee_repo
     app.state.settings = settings
 
+    # Ensure LLM model is available (auto-pull if missing)
+    await llm_client.ensure_model()
+
     logger.info("mindwall.ready", ollama_url=settings.ollama_base_url, model=settings.ollama_model)
 
     yield
